@@ -147,10 +147,10 @@ export default function App() {
           </summary>
           <div className="mt-3 text-sm text-gray-700 space-y-2">
             <div><strong>Relación C/N:</strong> ideal entre <strong>20 y 30</strong>.</div>
-            <div><strong>Humedad:</strong> óptima entre <strong>50 % y 60 %</strong>.</div>
+            <div><strong>Humedad:</strong> óptima entre <strong>50 % y 60 %</strong>.</div>
             <div><strong>pH:</strong> rango funcional <strong>5,0 – 8,5</strong>.</div>
             <div><strong>Salinidad (CE):</strong> &lt; <strong>4 dS/m</strong>.</div>
-            <div><strong>Temperatura:</strong> fase termófila <strong>55 – 65 °C</strong>.</div>
+            <div><strong>Temperatura:</strong> fase termófila <strong>55 – 65 °C</strong>.</div>
           </div>
         </details>
       </section>

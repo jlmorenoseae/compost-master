@@ -1,6 +1,6 @@
-// CompostMaster – Interfaz profesional rediseñada
+// CompostMaster – Diseño profesional completamente renovado
 import React, { useState, useMemo, useEffect } from "react";
-import { Trash2, Sparkles, Download, Save, Plus, BarChart3, AlertCircle, History, X, CheckCircle2, Leaf } from "lucide-react";
+import { Trash2, Sparkles, Download, Save, Plus, BarChart3, AlertCircle, History, X, CheckCircle2, Leaf, Info } from "lucide-react";
 
 // ===============================
 // RANGOS IDEALES
@@ -14,9 +14,9 @@ const IDEAL_HUM = [50, 60];
 const MATERIAL_GROUPS = ["Agrícola", "Urbano", "Industrial", "Ganadero", "Personalizado"];
 
 const CN_GROUPS = [
-  { key: "carbonados", label: "Carbonados", min: 40, color: "amber" },
-  { key: "equilibrados", label: "Equilibrados", min: 20, max: 40, color: "emerald" },
-  { key: "nitrogenados", label: "Nitrogenados", max: 20, color: "blue" }
+  { key: "carbonados", label: "🟡 Carbonados", min: 40, color: "from-yellow-400 to-amber-500" },
+  { key: "equilibrados", label: "🟢 Equilibrados", min: 20, max: 40, color: "from-green-400 to-emerald-500" },
+  { key: "nitrogenados", label: "🔵 Nitrogenados", max: 20, color: "from-blue-400 to-cyan-500" }
 ];
 
 // ===============================
@@ -107,65 +107,93 @@ function buildRecommendation(cn, hum) {
 // COMPONENTES
 // ===============================
 
-function ProgressBar({ value, min, max, label, unit = "" }) {
+function ProgressRing({ value, min, max, size = 120 }) {
   const percentage = Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
   const isOptimal = value >= min && value <= max;
-  
+  const strokeWidth = 10;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (percentage / 100) * circumference;
+
   return (
-    <div className="space-y-3">
-      <div className="flex justify-between items-baseline">
-        <span className="text-sm font-semibold text-stone-700">{label}</span>
-        <span className={`text-2xl font-bold ${isOptimal ? "text-emerald-600" : "text-amber-600"}`}>
-          {value}{unit}
-        </span>
-      </div>
-      <div className="relative h-4 bg-stone-200 rounded-full overflow-hidden shadow-inner">
-        <div 
-          className={`h-full transition-all duration-700 ease-out ${
-            isOptimal 
-              ? "bg-gradient-to-r from-emerald-400 to-emerald-600" 
-              : "bg-gradient-to-r from-amber-400 to-amber-600"
-          }`}
-          style={{ width: `${percentage}%` }}
-        >
-          <div className="h-full w-full opacity-30 bg-gradient-to-t from-white to-transparent" />
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="transform -rotate-90">
+        {/* Background circle */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="#e5e7eb"
+          strokeWidth={strokeWidth}
+        />
+        {/* Progress circle */}
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={isOptimal ? "#10b981" : "#f59e0b"}
+          strokeWidth={strokeWidth}
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className="transition-all duration-1000 ease-out"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="text-center">
+          <div className={`text-3xl font-black ${isOptimal ? 'text-green-600' : 'text-amber-600'}`}>
+            {value}
+          </div>
+          <div className="text-xs text-gray-500 font-semibold mt-1">
+            {isOptimal ? "✓ Óptimo" : "Ajustar"}
+          </div>
         </div>
-      </div>
-      <div className="flex justify-between text-xs text-stone-500 font-medium">
-        <span>Min: {min}{unit}</span>
-        <span className="text-emerald-600">RANGO ÓPTIMO</span>
-        <span>Max: {max}{unit}</span>
       </div>
     </div>
   );
 }
 
-function MaterialChart({ materials }) {
-  const maxProp = Math.max(...materials.map(m => m.proportion), 1);
+function MaterialBarChart({ materials }) {
+  if (!materials || materials.length === 0) return null;
+  
+  const total = materials.reduce((sum, m) => sum + m.proportion, 0);
   
   return (
     <div className="space-y-3">
-      {materials.map((m, idx) => (
-        <div key={m.id} className="space-y-1.5" style={{ animationDelay: `${idx * 50}ms` }}>
-          <div className="flex justify-between text-sm">
-            <span className="truncate flex-1 mr-3 text-stone-700 font-medium">{m.name}</span>
-            <span className="font-bold text-emerald-700">{m.proportion}%</span>
-          </div>
-          <div className="h-8 bg-stone-100 rounded-lg overflow-hidden shadow-sm">
-            <div 
-              className="h-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 transition-all duration-500 flex items-center justify-end pr-3 relative overflow-hidden"
-              style={{ width: `${(m.proportion / maxProp) * 100}%` }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
-              {m.proportion > 8 && (
-                <span className="text-xs text-white font-bold relative z-10 drop-shadow">
+      <div className="text-sm font-bold text-gray-700 mb-4">Distribución de materiales</div>
+      {materials.map((m, idx) => {
+        const percentage = total > 0 ? (m.proportion / total) * 100 : 0;
+        const cn = (m.C / m.N).toFixed(0);
+        const color = cn >= 40 ? 'from-yellow-400 to-amber-500' : 
+                      cn >= 20 ? 'from-green-400 to-emerald-500' : 
+                      'from-blue-400 to-cyan-500';
+        
+        return (
+          <div key={m.id} className="space-y-1.5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium text-gray-700 truncate flex-1 mr-3">{m.name}</span>
+              <span className="font-bold text-gray-900 whitespace-nowrap">{m.proportion}%</span>
+            </div>
+            <div className="relative h-10 bg-gray-100 rounded-lg overflow-hidden shadow-sm">
+              <div 
+                className={`absolute inset-y-0 left-0 bg-gradient-to-r ${color} transition-all duration-700 ease-out flex items-center justify-between px-3`}
+                style={{ width: `${percentage}%` }}
+              >
+                <span className="text-xs font-bold text-white drop-shadow-md">
                   {(m.proportion / 10).toFixed(1)} partes
                 </span>
-              )}
+                {percentage > 30 && (
+                  <span className="text-xs font-semibold text-white/80">
+                    C/N: {cn}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -195,26 +223,23 @@ function CustomMaterialModal({ onClose, onAdd }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl max-w-lg w-full p-8 shadow-2xl">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-2xl font-bold text-stone-800">Nuevo Material</h3>
-          <button 
-            onClick={onClose} 
-            className="text-stone-400 hover:text-stone-600 transition-colors p-1 hover:bg-stone-100 rounded-lg"
-          >
+          <h3 className="text-2xl font-bold text-gray-900">Añadir Material Personalizado</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <X size={24} />
           </button>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-semibold mb-2 text-stone-700">Nombre del material</label>
+            <label className="block text-sm font-bold mb-2 text-gray-700">Nombre del material</label>
             <input
               type="text"
               value={formData.name}
               onChange={e => setFormData({...formData, name: e.target.value})}
-              className="w-full border-2 border-stone-200 rounded-xl p-3 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 outline-none transition-all"
+              className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-green-500 focus:ring-4 focus:ring-green-100 outline-none transition-all text-gray-900"
               placeholder="Ej: Restos de poda de naranjo"
               required
             />
@@ -222,39 +247,39 @@ function CustomMaterialModal({ onClose, onAdd }) {
           
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-semibold mb-2 text-stone-700">% Carbono</label>
+              <label className="block text-sm font-bold mb-2 text-gray-700">% Carbono</label>
               <input
                 type="number"
                 step="0.1"
                 value={formData.C}
                 onChange={e => setFormData({...formData, C: e.target.value})}
-                className="w-full border-2 border-stone-200 rounded-xl p-3 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 outline-none transition-all"
+                className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-green-500 focus:ring-4 focus:ring-green-100 outline-none transition-all text-gray-900 text-center font-bold"
                 placeholder="45"
                 required
               />
             </div>
             
             <div>
-              <label className="block text-sm font-semibold mb-2 text-stone-700">% Nitrógeno</label>
+              <label className="block text-sm font-bold mb-2 text-gray-700">% Nitrógeno</label>
               <input
                 type="number"
                 step="0.1"
                 value={formData.N}
                 onChange={e => setFormData({...formData, N: e.target.value})}
-                className="w-full border-2 border-stone-200 rounded-xl p-3 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 outline-none transition-all"
+                className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-green-500 focus:ring-4 focus:ring-green-100 outline-none transition-all text-gray-900 text-center font-bold"
                 placeholder="1.5"
                 required
               />
             </div>
             
             <div>
-              <label className="block text-sm font-semibold mb-2 text-stone-700">% Humedad</label>
+              <label className="block text-sm font-bold mb-2 text-gray-700">% Humedad</label>
               <input
                 type="number"
                 step="1"
                 value={formData.humidity}
                 onChange={e => setFormData({...formData, humidity: e.target.value})}
-                className="w-full border-2 border-stone-200 rounded-xl p-3 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 outline-none transition-all"
+                className="w-full border-2 border-gray-200 rounded-xl p-3 focus:border-green-500 focus:ring-4 focus:ring-green-100 outline-none transition-all text-gray-900 text-center font-bold"
                 placeholder="60"
                 required
               />
@@ -262,21 +287,21 @@ function CustomMaterialModal({ onClose, onAdd }) {
           </div>
 
           <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-sm text-blue-900">
-            <strong>💡 Nota:</strong> Estos valores suelen obtenerse mediante análisis de laboratorio. 
-            Si no los conoces, usa materiales similares de la base de datos.
+            <strong className="flex items-center gap-2"><Info size={16} /> Nota importante:</strong>
+            <p className="mt-1">Estos valores suelen obtenerse mediante análisis de laboratorio. Si no los conoces con exactitud, usa materiales similares de la base de datos.</p>
           </div>
           
           <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-5 py-3 border-2 border-stone-300 rounded-xl hover:bg-stone-50 font-semibold transition-all"
+              className="flex-1 px-6 py-3 border-2 border-gray-300 rounded-xl hover:bg-gray-50 font-bold transition-all text-gray-700"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex-1 px-5 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 font-semibold shadow-lg shadow-emerald-200 transition-all"
+              className="flex-1 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:from-green-600 hover:to-emerald-700 font-bold shadow-lg hover:shadow-xl transition-all"
             >
               Añadir Material
             </button>
@@ -296,7 +321,6 @@ export default function App() {
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [savedMixes, setSavedMixes] = useState([]);
-  const [showChart, setShowChart] = useState(true);
 
   // Cargar del localStorage
   useEffect(() => {
@@ -323,6 +347,7 @@ export default function App() {
 
   const cnOk = stats.cn >= IDEAL_CN[0] && stats.cn <= IDEAL_CN[1];
   const humOk = stats.hum >= IDEAL_HUM[0] && stats.hum <= IDEAL_HUM[1];
+  const totalOk = Math.abs(totalProportion - 100) < 0.1;
 
   const toggleMaterial = mat => {
     setSelected(prev =>
@@ -364,7 +389,7 @@ export default function App() {
     const updated = [newMix, ...savedMixes].slice(0, 10);
     setSavedMixes(updated);
     localStorage.setItem('savedMixes', JSON.stringify(updated));
-    alert("¡Mezcla guardada!");
+    alert("✅ ¡Mezcla guardada correctamente!");
   };
 
   const loadMix = (mix) => {
@@ -373,127 +398,161 @@ export default function App() {
   };
 
   const deleteMix = (id) => {
-    const updated = savedMixes.filter(m => m.id !== id);
-    setSavedMixes(updated);
-    localStorage.setItem('savedMixes', JSON.stringify(updated));
+    if (confirm("¿Seguro que quieres eliminar esta mezcla?")) {
+      const updated = savedMixes.filter(m => m.id !== id);
+      setSavedMixes(updated);
+      localStorage.setItem('savedMixes', JSON.stringify(updated));
+    }
   };
 
   const exportMix = () => {
     if (selected.length === 0) return;
 
     const text = `
-COMPOSTMASTER - RECETA DE COMPOSTAJE
-=====================================
-Fecha: ${new Date().toLocaleDateString()}
+═══════════════════════════════════════════════════
+    COMPOSTMASTER - RECETA DE COMPOSTAJE
+═══════════════════════════════════════════════════
 
-MATERIALES:
-${selected.map(m => `• ${m.name}: ${m.proportion}% (${(m.proportion / 10).toFixed(1)} partes)`).join('\n')}
+Fecha: ${new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
 
-RESULTADOS:
-• Relación C/N: ${stats.cn} ${cnOk ? '✓ ÓPTIMO' : '⚠ AJUSTAR'}
-• Humedad: ${stats.hum}% ${humOk ? '✓ ÓPTIMO' : '⚠ AJUSTAR'}
+MATERIALES SELECCIONADOS:
+${selected.map((m, i) => `${i + 1}. ${m.name}: ${m.proportion}% (${(m.proportion / 10).toFixed(1)} partes)`).join('\n')}
+
+COMPOSICIÓN TOTAL: ${totalProportion.toFixed(1)}%
+
+RESULTADOS DEL ANÁLISIS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Relación C/N: ${stats.cn} ${cnOk ? '✓ ÓPTIMO' : '⚠ REQUIERE AJUSTE'}
+  (Rango ideal: ${IDEAL_CN[0]}-${IDEAL_CN[1]})
+
+• Humedad: ${stats.hum}% ${humOk ? '✓ ÓPTIMO' : '⚠ REQUIERE AJUSTE'}
+  (Rango ideal: ${IDEAL_HUM[0]}-${IDEAL_HUM[1]}%)
 
 RECOMENDACIÓN:
 ${buildRecommendation(stats.cn, stats.hum)}
 
-FACTORES IDEALES:
+PARÁMETROS IDEALES DE REFERENCIA:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • Relación C/N: 20-30
 • Humedad: 50-60%
 • pH: 5.0-8.5
 • Salinidad (CE): < 4 dS/m
-• Temperatura: 55-65°C (fase termófila)
+• Temperatura (fase termófila): 55-65°C
+
+═══════════════════════════════════════════════════
+Generado por CompostMaster
+Metodología Universidad Miguel Hernández (UMH)
+═══════════════════════════════════════════════════
     `.trim();
 
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `compost-receta-${Date.now()}.txt`;
+    a.download = `CompostMaster_Receta_${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const clearAll = () => {
-    if (confirm("¿Seguro que quieres limpiar toda la mezcla?")) {
+    if (confirm("¿Seguro que quieres eliminar toda la mezcla actual?")) {
       setSelected([]);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-stone-50 to-emerald-50 relative overflow-hidden">
-      {/* Decorative background pattern */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute top-20 left-20 w-96 h-96 bg-emerald-500 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-20 w-96 h-96 bg-amber-500 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative z-10 max-w-7xl mx-auto p-4 md:p-8">
-        {/* HEADER */}
-        <header className="mb-8 md:mb-12 text-center">
-          <div className="inline-flex items-center justify-center gap-3 mb-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-200">
-              <Leaf className="text-white" size={28} />
+    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
+      <div className="max-w-7xl mx-auto p-4 md:p-8">
+        {/* HEADER MEJORADO */}
+        <header className="mb-8">
+          <div className="bg-white rounded-3xl shadow-xl p-6 md:p-8 border-4 border-green-100">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <Leaf className="text-white" size={36} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h1 className="text-4xl md:text-5xl font-black text-gray-900">
+                    Compost<span className="text-green-600">Master</span>
+                  </h1>
+                  <p className="text-gray-600 font-semibold">Calculadora Profesional de Compostaje</p>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                {savedMixes.length > 0 && (
+                  <button
+                    onClick={() => setShowHistory(true)}
+                    className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all hover:scale-105"
+                  >
+                    <History size={20} />
+                    <span>Mis Mezclas ({savedMixes.length})</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowCustomModal(true)}
+                  className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all hover:scale-105"
+                >
+                  <Plus size={20} />
+                  <span className="hidden sm:inline">Material Personalizado</span>
+                  <span className="sm:hidden">Nuevo</span>
+                </button>
+              </div>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black bg-gradient-to-r from-emerald-600 to-emerald-800 bg-clip-text text-transparent">
-              CompostMaster
-            </h1>
           </div>
-          <p className="text-stone-600 text-lg font-medium">Calculadora Profesional de Compostaje</p>
-          <p className="text-stone-500 text-sm mt-1">Metodología Universidad Miguel Hernández (UMH)</p>
-          
-          {savedMixes.length > 0 && (
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow-md hover:shadow-lg transition-all border border-stone-200"
-            >
-              <History size={18} />
-              <span className="font-semibold text-sm">Mis Mezclas ({savedMixes.length})</span>
-            </button>
-          )}
         </header>
 
         {/* MODALES */}
         {showHistory && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl max-w-3xl w-full p-6 max-h-[85vh] overflow-y-auto shadow-2xl">
-              <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-stone-200">
-                <h3 className="text-2xl font-bold text-stone-800">Mezclas Guardadas</h3>
-                <button onClick={() => setShowHistory(false)} className="text-stone-400 hover:text-stone-600 p-1 hover:bg-stone-100 rounded-lg transition-colors">
-                  <X size={24} />
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-3xl max-w-4xl w-full p-8 max-h-[90vh] overflow-y-auto shadow-2xl">
+              <div className="flex justify-between items-center mb-6 pb-4 border-b-4 border-green-100">
+                <h3 className="text-3xl font-black text-gray-900">Mezclas Guardadas</h3>
+                <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-xl transition-all">
+                  <X size={28} />
                 </button>
               </div>
               
               {savedMixes.length === 0 ? (
-                <p className="text-stone-500 text-center py-12">No hay mezclas guardadas</p>
+                <div className="text-center py-16">
+                  <div className="text-6xl mb-4">📦</div>
+                  <p className="text-gray-500 text-lg font-semibold">No hay mezclas guardadas todavía</p>
+                </div>
               ) : (
-                <div className="space-y-4">
+                <div className="grid gap-4">
                   {savedMixes.map(mix => (
-                    <div key={mix.id} className="border-2 border-stone-200 rounded-xl p-5 hover:border-emerald-300 hover:shadow-md transition-all">
-                      <div className="flex justify-between items-start mb-3">
+                    <div key={mix.id} className="border-4 border-gray-100 rounded-2xl p-6 hover:border-green-200 hover:shadow-lg transition-all">
+                      <div className="flex justify-between items-start mb-4">
                         <div>
-                          <h4 className="font-bold text-lg text-stone-800">{mix.name}</h4>
-                          <p className="text-sm text-stone-500">
+                          <h4 className="font-black text-xl text-gray-900">{mix.name}</h4>
+                          <p className="text-sm text-gray-500 font-semibold mt-1">
                             {new Date(mix.date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
                           </p>
                         </div>
                         <div className="flex gap-2">
                           <button
                             onClick={() => loadMix(mix)}
-                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors"
+                            className="px-5 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl text-sm font-bold hover:shadow-lg transition-all"
                           >
                             Cargar
                           </button>
                           <button
                             onClick={() => deleteMix(mix.id)}
-                            className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-semibold hover:bg-red-600 transition-colors"
+                            className="px-5 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl text-sm font-bold hover:shadow-lg transition-all"
                           >
-                            Borrar
+                            Eliminar
                           </button>
                         </div>
                       </div>
-                      <div className="flex gap-4 text-sm font-semibold">
-                        <span className="text-stone-600">C/N: <span className="text-emerald-600">{mix.stats.cn}</span></span>
-                        <span className="text-stone-600">Humedad: <span className="text-blue-600">{mix.stats.hum}%</span></span>
+                      <div className="flex gap-6 text-sm">
+                        <div className="bg-green-50 px-4 py-2 rounded-xl">
+                          <span className="text-gray-600 font-semibold">C/N: </span>
+                          <span className="text-green-700 font-black text-lg">{mix.stats.cn}</span>
+                        </div>
+                        <div className="bg-blue-50 px-4 py-2 rounded-xl">
+                          <span className="text-gray-600 font-semibold">Humedad: </span>
+                          <span className="text-blue-700 font-black text-lg">{mix.stats.hum}%</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -511,169 +570,103 @@ FACTORES IDEALES:
         )}
 
         {/* FACTORES IDEALES */}
-        <section className="bg-white/80 backdrop-blur rounded-2xl shadow-xl p-6 mb-8 border border-stone-200">
+        <section className="bg-white rounded-3xl shadow-xl p-6 md:p-8 mb-8 border-4 border-blue-100">
           <details className="group">
-            <summary className="cursor-pointer font-bold text-lg text-stone-800 flex items-center gap-2 hover:text-emerald-600 transition-colors">
-              <span className="text-2xl">📊</span>
-              <span>Factores Ideales para el Compostaje</span>
-              <span className="ml-auto group-open:rotate-180 transition-transform">▼</span>
+            <summary className="cursor-pointer font-black text-2xl text-gray-900 flex items-center gap-3 hover:text-green-600 transition-colors">
+              <span className="text-3xl">📊</span>
+              <span className="flex-1">Factores Ideales para el Compostaje</span>
+              <span className="text-green-600 group-open:rotate-180 transition-transform">▼</span>
             </summary>
-            <div className="mt-6 grid md:grid-cols-2 gap-4 text-sm">
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full mt-1.5" />
-                <div>
-                  <strong className="text-stone-800">Relación C/N:</strong>
-                  <span className="text-stone-600"> ideal entre </span>
-                  <strong className="text-emerald-600">20 y 30</strong>
+            <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[
+                { label: "Relación C/N", value: "20 - 30", color: "green" },
+                { label: "Humedad", value: "50% - 60%", color: "blue" },
+                { label: "pH", value: "5,0 - 8,5", color: "purple" },
+                { label: "Salinidad (CE)", value: "< 4 dS/m", color: "amber" },
+                { label: "Temperatura", value: "55 - 65 °C", color: "red" },
+              ].map((item, idx) => (
+                <div key={idx} className={`bg-${item.color}-50 border-4 border-${item.color}-200 rounded-2xl p-4`}>
+                  <div className="font-bold text-gray-700 text-sm mb-1">{item.label}</div>
+                  <div className={`font-black text-2xl text-${item.color}-600`}>{item.value}</div>
                 </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5" />
-                <div>
-                  <strong className="text-stone-800">Humedad:</strong>
-                  <span className="text-stone-600"> óptima entre </span>
-                  <strong className="text-blue-600">50% y 60%</strong>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5" />
-                <div>
-                  <strong className="text-stone-800">pH:</strong>
-                  <span className="text-stone-600"> rango funcional </span>
-                  <strong className="text-purple-600">5,0 – 8,5</strong>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 bg-amber-500 rounded-full mt-1.5" />
-                <div>
-                  <strong className="text-stone-800">Salinidad (CE):</strong>
-                  <span className="text-stone-600"> menor a </span>
-                  <strong className="text-amber-600">4 dS/m</strong>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 md:col-span-2">
-                <div className="w-2 h-2 bg-red-500 rounded-full mt-1.5" />
-                <div>
-                  <strong className="text-stone-800">Temperatura:</strong>
-                  <span className="text-stone-600"> fase termófila </span>
-                  <strong className="text-red-600">55 – 65 °C</strong>
-                </div>
-              </div>
+              ))}
             </div>
           </details>
         </section>
 
-        <div className="grid lg:grid-cols-5 gap-6">
-          {/* COLUMNA IZQUIERDA - SELECCIÓN (3/5) */}
-          <div className="lg:col-span-3 space-y-6">
-            <section className="bg-white/80 backdrop-blur rounded-2xl shadow-xl p-6 border border-stone-200">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b-2 border-stone-200">
-                <h2 className="font-bold text-2xl text-stone-800 flex items-center gap-2">
-                  <span className="text-2xl">1️⃣</span>
-                  Selecciona Materiales
-                </h2>
-                <button
-                  onClick={() => setShowCustomModal(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 font-semibold shadow-lg shadow-blue-200 transition-all"
-                >
-                  <Plus size={18} /> Material Personalizado
-                </button>
-              </div>
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* COLUMNA IZQUIERDA - SELECCIÓN */}
+          <div>
+            <section className="bg-white rounded-3xl shadow-xl p-6 md:p-8 border-4 border-green-100">
+              <h2 className="font-black text-3xl text-gray-900 mb-6 flex items-center gap-3">
+                <span className="text-4xl">1️⃣</span>
+                Selecciona Materiales
+              </h2>
               
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {MATERIAL_GROUPS.map(group => {
                   const groupMats = allMaterials.filter(m => m.group === group);
                   if (groupMats.length === 0 && group === "Personalizado") return null;
                   
                   return (
-                    <details key={group} className="group border-2 border-stone-200 rounded-xl overflow-hidden">
-                      <summary className="cursor-pointer bg-gradient-to-r from-stone-50 to-stone-100 px-5 py-4 font-bold text-stone-800 hover:from-stone-100 hover:to-stone-200 transition-all flex items-center gap-3">
-                        <span className="group-open:rotate-90 transition-transform">▶</span>
+                    <details key={group} className="group border-4 border-gray-100 rounded-2xl overflow-hidden">
+                      <summary className="cursor-pointer bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 font-black text-gray-900 text-lg hover:from-gray-100 hover:to-gray-200 transition-all flex items-center gap-3">
+                        <span className="text-2xl group-open:rotate-90 transition-transform">▶</span>
                         <span className="flex-1">{group}</span>
-                        <span className="text-sm font-normal bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full">
-                          {groupMats.length} materiales
+                        <span className="text-sm font-bold bg-green-500 text-white px-4 py-1 rounded-full">
+                          {groupMats.length}
                         </span>
                       </summary>
-                      <div className="p-5 bg-white">
-                        {group === "Personalizado" ? (
-                          <div className="grid gap-3">
-                            {groupMats.map(mat => {
-                              const isSelected = selected.find(m => m.id === mat.id);
-                              return (
-                                <button
-                                  key={mat.id}
-                                  onClick={() => toggleMaterial(mat)}
-                                  className={`border-2 rounded-xl p-4 text-left transition-all ${
-                                    isSelected 
-                                      ? 'border-emerald-500 bg-emerald-50 shadow-md' 
-                                      : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {isSelected && <CheckCircle2 className="text-emerald-600" size={20} />}
-                                    <div className="flex-1">
-                                      <div className="font-semibold text-stone-800">{mat.name}</div>
-                                      <div className="text-xs text-stone-500 mt-1">
-                                        C/N ≈ {(mat.C / mat.N).toFixed(1)} · Humedad {mat.humidity}%
-                                      </div>
-                                    </div>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          CN_GROUPS.map(cnGroup => {
-                            const mats = groupMats
-                              .filter(m => {
-                                const cn = m.C / m.N;
-                                if (cnGroup.min && cn < cnGroup.min) return false;
-                                if (cnGroup.max && cn >= cnGroup.max) return false;
-                                return true;
-                              })
-                              .sort((a, b) => a.C / a.N - b.C / b.N);
+                      <div className="p-6 bg-white">
+                        {CN_GROUPS.map(cnGroup => {
+                          const mats = groupMats
+                            .filter(m => {
+                              if (m.isCustom) return true;
+                              const cn = m.C / m.N;
+                              if (cnGroup.min && cn < cnGroup.min) return false;
+                              if (cnGroup.max && cn >= cnGroup.max) return false;
+                              return true;
+                            })
+                            .sort((a, b) => a.C / a.N - b.C / b.N);
 
-                            if (mats.length === 0) return null;
+                          if (mats.length === 0) return null;
 
-                            return (
-                              <div key={cnGroup.key} className="mb-6 last:mb-0">
-                                <div className={`inline-block font-bold text-sm mb-3 px-3 py-1 rounded-full ${
-                                  cnGroup.color === 'amber' ? 'bg-amber-100 text-amber-700' :
-                                  cnGroup.color === 'emerald' ? 'bg-emerald-100 text-emerald-700' :
-                                  'bg-blue-100 text-blue-700'
-                                }`}>
-                                  {cnGroup.label}
-                                </div>
-                                <div className="grid sm:grid-cols-2 gap-3">
-                                  {mats.map(mat => {
-                                    const isSelected = selected.find(m => m.id === mat.id);
-                                    return (
-                                      <button
-                                        key={mat.id}
-                                        onClick={() => toggleMaterial(mat)}
-                                        className={`border-2 rounded-xl p-4 text-left transition-all ${
-                                          isSelected 
-                                            ? 'border-emerald-500 bg-emerald-50 shadow-md scale-[1.02]' 
-                                            : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50 hover:scale-[1.01]'
-                                        }`}
-                                      >
-                                        <div className="flex items-start gap-2">
-                                          {isSelected && <CheckCircle2 className="text-emerald-600 flex-shrink-0 mt-0.5" size={18} />}
-                                          <div className="flex-1 min-w-0">
-                                            <div className="font-semibold text-sm text-stone-800 truncate">{mat.name}</div>
-                                            <div className="text-xs text-stone-500 mt-1">
-                                              C/N ≈ {(mat.C / mat.N).toFixed(1)} · Humedad {mat.humidity}%
-                                            </div>
+                          return (
+                            <div key={cnGroup.key} className="mb-6 last:mb-0">
+                              <div className={`inline-block font-black text-sm mb-4 px-4 py-2 rounded-full bg-gradient-to-r ${cnGroup.color} text-white shadow-md`}>
+                                {cnGroup.label}
+                              </div>
+                              <div className="grid gap-3">
+                                {mats.map(mat => {
+                                  const isSelected = selected.find(m => m.id === mat.id);
+                                  return (
+                                    <button
+                                      key={mat.id}
+                                      onClick={() => toggleMaterial(mat)}
+                                      className={`border-4 rounded-2xl p-4 text-left transition-all ${
+                                        isSelected 
+                                          ? 'border-green-400 bg-green-50 shadow-lg scale-[1.02]' 
+                                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        {isSelected && (
+                                          <CheckCircle2 className="text-green-600 flex-shrink-0" size={24} strokeWidth={3} />
+                                        )}
+                                        <div className="flex-1">
+                                          <div className="font-bold text-gray-900">{mat.name}</div>
+                                          <div className="text-sm text-gray-600 font-semibold mt-1">
+                                            C/N: {(mat.C / mat.N).toFixed(1)} · Humedad: {mat.humidity}%
                                           </div>
                                         </div>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
                               </div>
-                            );
-                          })
-                        )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </details>
                   );
@@ -682,29 +675,28 @@ FACTORES IDEALES:
             </section>
           </div>
 
-          {/* COLUMNA DERECHA - AJUSTES Y RESULTADOS (2/5) */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* PASO 2 - AJUSTES */}
+          {/* COLUMNA DERECHA - RESULTADOS */}
+          <div className="space-y-8">
+            {/* AJUSTES */}
             {selected.length > 0 && (
-              <section className="bg-white/80 backdrop-blur rounded-2xl shadow-xl p-6 border border-stone-200 sticky top-6">
-                <h2 className="font-bold text-2xl text-stone-800 mb-6 pb-4 border-b-2 border-stone-200 flex items-center gap-2">
-                  <span className="text-2xl">2️⃣</span>
+              <section className="bg-white rounded-3xl shadow-xl p-6 md:p-8 border-4 border-yellow-100">
+                <h2 className="font-black text-3xl text-gray-900 mb-6 flex items-center gap-3">
+                  <span className="text-4xl">2️⃣</span>
                   Ajustar Proporciones
                 </h2>
                 
-                {/* Alerta suma */}
-                {totalProportion !== 100 && totalProportion > 0 && (
-                  <div className={`mb-5 rounded-xl p-4 border-2 ${
+                {!totalOk && totalProportion > 0 && (
+                  <div className={`mb-6 rounded-2xl p-5 border-4 ${
                     totalProportion < 100 
-                      ? 'bg-amber-50 border-amber-300' 
+                      ? 'bg-yellow-50 border-yellow-300' 
                       : 'bg-red-50 border-red-300'
-                  } flex items-start gap-3`}>
-                    <AlertCircle size={22} className={totalProportion < 100 ? 'text-amber-600' : 'text-red-600'} />
+                  } flex items-start gap-4`}>
+                    <AlertCircle size={28} className={totalProportion < 100 ? 'text-yellow-600' : 'text-red-600'} strokeWidth={3} />
                     <div className="flex-1">
-                      <div className="font-bold text-sm mb-1">Total: {totalProportion.toFixed(1)}%</div>
-                      <div className="text-xs">
+                      <div className="font-black text-lg mb-1">Total: {totalProportion.toFixed(1)}%</div>
+                      <div className="text-sm font-semibold">
                         {totalProportion < 100 
-                          ? `Faltan ${(100 - totalProportion).toFixed(1)}% para completar`
+                          ? `Faltan ${(100 - totalProportion).toFixed(1)}% para completar la mezcla`
                           : `Te pasas por ${(totalProportion - 100).toFixed(1)}%`
                         }
                       </div>
@@ -712,32 +704,31 @@ FACTORES IDEALES:
                   </div>
                 )}
 
-                <div className="flex gap-2 mb-5">
+                <div className="flex gap-3 mb-6">
                   <button
                     onClick={optimizeMix}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-200 transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-black text-lg hover:shadow-xl transition-all hover:scale-105"
                   >
-                    <Sparkles size={18} /> Distribuir
+                    <Sparkles size={24} /> Distribuir Equitativamente
                   </button>
                   <button
                     onClick={clearAll}
-                    className="px-4 py-3 border-2 border-red-300 text-red-600 rounded-xl hover:bg-red-50 font-semibold transition-all"
+                    className="px-6 py-4 border-4 border-red-300 text-red-600 rounded-2xl hover:bg-red-50 font-black transition-all"
                   >
                     Limpiar
                   </button>
                 </div>
 
-                <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-2">
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                   {selected.map(m => (
-                    <div key={m.id} className="flex items-center gap-2 bg-stone-50 rounded-xl p-3 border border-stone-200">
+                    <div key={m.id} className="flex items-center gap-3 bg-gray-50 rounded-2xl p-4 border-2 border-gray-200">
                       <button 
                         onClick={() => toggleMaterial(m)} 
-                        className="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-100 rounded-lg transition-all flex-shrink-0"
-                        title="Eliminar"
+                        className="text-red-500 hover:text-red-700 p-2 hover:bg-red-100 rounded-xl transition-all flex-shrink-0"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={20} strokeWidth={3} />
                       </button>
-                      <span className="flex-1 text-sm font-medium truncate text-stone-700">{m.name}</span>
+                      <span className="flex-1 font-bold text-gray-900 truncate">{m.name}</span>
                       <input
                         type="number"
                         step="0.1"
@@ -745,122 +736,79 @@ FACTORES IDEALES:
                         max="100"
                         value={m.proportion}
                         onChange={e => updateProp(m.id, e.target.value)}
-                        className="w-16 border-2 border-stone-300 rounded-lg p-1.5 text-center font-bold text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none"
+                        className="w-20 border-4 border-gray-300 rounded-xl p-2 text-center font-black text-lg focus:border-green-500 focus:ring-4 focus:ring-green-200 outline-none transition-all"
                       />
-                      <span className="text-sm font-bold text-stone-600">%</span>
+                      <span className="font-black text-gray-600">%</span>
                     </div>
                   ))}
                 </div>
               </section>
             )}
 
-            {/* PASO 3 - RESULTADOS */}
+            {/* RESULTADOS */}
             {selected.length > 0 && totalProportion > 0 && (
-              <section className="bg-white/80 backdrop-blur rounded-2xl shadow-xl p-6 border border-stone-200">
-                <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-stone-200">
-                  <h2 className="font-bold text-2xl text-stone-800 flex items-center gap-2">
-                    <span className="text-2xl">3️⃣</span>
+              <section className="bg-white rounded-3xl shadow-xl p-6 md:p-8 border-4 border-purple-100">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="font-black text-3xl text-gray-900 flex items-center gap-3">
+                    <span className="text-4xl">3️⃣</span>
                     Resultados
                   </h2>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setShowChart(!showChart)}
-                      className={`p-2.5 border-2 rounded-xl transition-all ${
-                        showChart 
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-600' 
-                          : 'border-stone-300 hover:bg-stone-50'
-                      }`}
-                      title={showChart ? "Ocultar gráfico" : "Mostrar gráfico"}
-                    >
-                      <BarChart3 size={20} />
-                    </button>
-                    <button
                       onClick={saveMix}
-                      className="p-2.5 border-2 border-stone-300 rounded-xl hover:bg-stone-50 transition-all"
+                      className="p-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl hover:shadow-lg transition-all"
                       title="Guardar mezcla"
                     >
-                      <Save size={20} />
+                      <Save size={22} strokeWidth={3} />
                     </button>
                     <button
                       onClick={exportMix}
-                      className="p-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-200 transition-all"
+                      className="p-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-lg transition-all"
                       title="Exportar receta"
                     >
-                      <Download size={20} />
+                      <Download size={22} strokeWidth={3} />
                     </button>
                   </div>
                 </div>
 
-                {/* Gráfico */}
-                {showChart && (
-                  <div className="mb-6 p-5 bg-gradient-to-br from-stone-50 to-stone-100 rounded-xl border border-stone-200">
-                    <h3 className="font-bold text-sm text-stone-700 mb-4">Distribución Visual</h3>
-                    <MaterialChart materials={selected} />
-                  </div>
-                )}
-
-                {/* Barras de progreso */}
-                <div className="space-y-6 mb-6">
-                  <ProgressBar 
-                    value={stats.cn} 
-                    min={IDEAL_CN[0]} 
-                    max={IDEAL_CN[1]} 
-                    label="Relación C/N" 
-                  />
-                  <ProgressBar 
-                    value={stats.hum} 
-                    min={IDEAL_HUM[0]} 
-                    max={IDEAL_HUM[1]} 
-                    label="Humedad" 
-                    unit="%" 
-                  />
+                {/* Gráfico de barras */}
+                <div className="mb-8 p-6 bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl border-4 border-gray-200">
+                  <MaterialBarChart materials={selected} />
                 </div>
 
-                {/* Tarjetas métricas */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className={`p-5 rounded-xl border-2 ${
-                    cnOk 
-                      ? "bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-300" 
-                      : "bg-gradient-to-br from-amber-50 to-amber-100 border-amber-300"
-                  }`}>
-                    <div className="text-xs font-bold text-stone-600 mb-2">RELACIÓN C/N</div>
-                    <div className={`text-4xl font-black mb-2 ${cnOk ? 'text-emerald-700' : 'text-amber-700'}`}>
-                      {stats.cn}
-                    </div>
-                    <div className={`text-xs font-bold ${cnOk ? 'text-emerald-600' : 'text-amber-600'}`}>
-                      {cnOk ? "✓ ÓPTIMO" : "⚠ AJUSTAR"}
+                {/* Anillos de progreso */}
+                <div className="grid grid-cols-2 gap-6 mb-8">
+                  <div className="flex flex-col items-center">
+                    <ProgressRing value={stats.cn} min={IDEAL_CN[0]} max={IDEAL_CN[1]} size={140} />
+                    <div className="mt-4 text-center">
+                      <div className="font-black text-gray-900 text-lg">Relación C/N</div>
+                      <div className="text-sm text-gray-600 font-semibold">Rango: {IDEAL_CN[0]}-{IDEAL_CN[1]}</div>
                     </div>
                   </div>
-                  <div className={`p-5 rounded-xl border-2 ${
-                    humOk 
-                      ? "bg-gradient-to-br from-blue-50 to-blue-100 border-blue-300" 
-                      : "bg-gradient-to-br from-amber-50 to-amber-100 border-amber-300"
-                  }`}>
-                    <div className="text-xs font-bold text-stone-600 mb-2">HUMEDAD</div>
-                    <div className={`text-4xl font-black mb-2 ${humOk ? 'text-blue-700' : 'text-amber-700'}`}>
-                      {stats.hum}%
-                    </div>
-                    <div className={`text-xs font-bold ${humOk ? 'text-blue-600' : 'text-amber-600'}`}>
-                      {humOk ? "✓ ÓPTIMO" : "⚠ AJUSTAR"}
+                  <div className="flex flex-col items-center">
+                    <ProgressRing value={stats.hum} min={IDEAL_HUM[0]} max={IDEAL_HUM[1]} size={140} />
+                    <div className="mt-4 text-center">
+                      <div className="font-black text-gray-900 text-lg">Humedad</div>
+                      <div className="text-sm text-gray-600 font-semibold">Rango: {IDEAL_HUM[0]}-{IDEAL_HUM[1]}%</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Recomendación */}
-                <div className={`rounded-xl p-5 border-2 ${
+                <div className={`rounded-2xl p-6 border-4 ${
                   cnOk && humOk 
-                    ? "bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-300" 
-                    : "bg-gradient-to-br from-amber-50 to-amber-100 border-amber-300"
+                    ? "bg-gradient-to-br from-green-50 to-emerald-50 border-green-300" 
+                    : "bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-300"
                 }`}>
-                  <div className="flex items-start gap-3">
-                    <span className="text-3xl flex-shrink-0">
+                  <div className="flex items-start gap-4">
+                    <span className="text-5xl flex-shrink-0">
                       {cnOk && humOk ? "🎉" : "💡"}
                     </span>
                     <div className="flex-1">
-                      <div className={`font-bold mb-2 ${cnOk && humOk ? 'text-emerald-800' : 'text-amber-800'}`}>
+                      <div className={`font-black text-2xl mb-3 ${cnOk && humOk ? 'text-green-700' : 'text-yellow-700'}`}>
                         {cnOk && humOk ? "¡Mezcla Perfecta!" : "Recomendación"}
                       </div>
-                      <div className="text-sm text-stone-700 leading-relaxed">
+                      <div className="text-gray-700 font-semibold leading-relaxed">
                         {buildRecommendation(stats.cn, stats.hum)}
                       </div>
                     </div>
@@ -869,15 +817,15 @@ FACTORES IDEALES:
               </section>
             )}
 
-            {/* Mensaje inicial */}
+            {/* Estado inicial */}
             {selected.length === 0 && (
-              <section className="bg-white/80 backdrop-blur rounded-2xl shadow-xl p-12 text-center border border-stone-200">
-                <div className="w-20 h-20 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-lg shadow-emerald-200 animate-pulse">
-                  <Leaf className="text-white" size={40} />
+              <section className="bg-white rounded-3xl shadow-xl p-12 text-center border-4 border-green-100">
+                <div className="w-32 h-32 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full mx-auto mb-6 flex items-center justify-center shadow-2xl animate-pulse">
+                  <Leaf className="text-white" size={64} strokeWidth={2.5} />
                 </div>
-                <h3 className="font-bold text-2xl mb-3 text-stone-800">Comienza tu Mezcla</h3>
-                <p className="text-stone-600">
-                  Selecciona materiales de la izquierda para calcular la relación C/N y humedad óptimas
+                <h3 className="font-black text-3xl mb-4 text-gray-900">¡Comienza tu Mezcla!</h3>
+                <p className="text-gray-600 text-lg font-semibold max-w-md mx-auto">
+                  Selecciona materiales de la izquierda para calcular la relación C/N y humedad óptimas para tu compost
                 </p>
               </section>
             )}
@@ -885,10 +833,10 @@ FACTORES IDEALES:
         </div>
 
         {/* FOOTER */}
-        <footer className="mt-12 text-center text-sm text-stone-500 pb-6">
-          <div className="inline-block bg-white/60 backdrop-blur rounded-xl px-6 py-4 shadow-md border border-stone-200">
-            <p className="font-semibold text-stone-700">CompostMaster · Metodología UMH</p>
-            <p className="mt-1">Para una gestión sostenible de residuos orgánicos 🌍</p>
+        <footer className="mt-12 text-center">
+          <div className="inline-block bg-white rounded-2xl px-8 py-4 shadow-xl border-4 border-gray-100">
+            <p className="font-black text-gray-900 text-lg">CompostMaster · Metodología UMH</p>
+            <p className="text-gray-600 font-semibold mt-1">Para una gestión sostenible de residuos orgánicos 🌍</p>
           </div>
         </footer>
       </div>

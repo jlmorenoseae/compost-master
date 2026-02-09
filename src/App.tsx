@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Trash2, Sparkles, Download, Save, Plus, History, X, CheckCircle2, Leaf, Info, AlertCircle } from "lucide-react";
+import { Trash2, Download, Save, Plus, History, X, CheckCircle2, Leaf, Info, AlertCircle, Zap } from "lucide-react";
 
 // CONSTANTES
 const IDEAL_CN = [20, 30];
 const IDEAL_HUM = [50, 60];
+const TARGET_CN = 25; // Objetivo óptimo
+const TARGET_HUM = 55; // Objetivo óptimo
 const MATERIAL_GROUPS = ["Agrícola", "Urbano", "Industrial", "Ganadero", "Personalizado"];
 
 const BASE_MATERIALS = [
@@ -64,6 +66,99 @@ function calculateMix(materials) {
   };
 }
 
+// OPTIMIZACIÓN INTELIGENTE
+function optimizeMixSmart(materials) {
+  if (materials.length === 0) return materials;
+  if (materials.length === 1) return materials.map(m => ({ ...m, proportion: 100 }));
+
+  // Algoritmo de optimización iterativo
+  const maxIterations = 1000;
+  const learningRate = 0.5;
+  
+  // Inicializar con proporciones iguales
+  let proportions = materials.map(() => 100 / materials.length);
+  
+  for (let iter = 0; iter < maxIterations; iter++) {
+    // Calcular métricas actuales
+    let totalC = 0, totalN = 0, totalWater = 0, totalFresh = 0;
+    
+    materials.forEach((mat, i) => {
+      const fresh = proportions[i];
+      const dry = fresh * (1 - mat.humidity / 100);
+      totalC += dry * (mat.C / 100);
+      totalN += dry * (mat.N / 100);
+      totalWater += fresh - dry;
+      totalFresh += fresh;
+    });
+    
+    const currentCN = totalN > 0 ? totalC / totalN : 0;
+    const currentHum = totalFresh > 0 ? (totalWater / totalFresh) * 100 : 0;
+    
+    // Calcular error
+    const errorCN = TARGET_CN - currentCN;
+    const errorHum = TARGET_HUM - currentHum;
+    const totalError = Math.abs(errorCN) + Math.abs(errorHum);
+    
+    // Si el error es muy pequeño, hemos terminado
+    if (totalError < 0.5) break;
+    
+    // Ajustar proporciones basándose en las características de cada material
+    const adjustments = materials.map((mat, i) => {
+      const matCN = mat.C / mat.N;
+      const matHum = mat.humidity;
+      
+      let adjustment = 0;
+      
+      // Ajustar según C/N
+      if (errorCN > 0) {
+        // Necesitamos más carbono - aumentar materiales carbonados
+        if (matCN > currentCN) adjustment += learningRate * errorCN / 10;
+        else adjustment -= learningRate * errorCN / 10;
+      } else {
+        // Necesitamos más nitrógeno - aumentar materiales nitrogenados
+        if (matCN < currentCN) adjustment -= learningRate * errorCN / 10;
+        else adjustment += learningRate * errorCN / 10;
+      }
+      
+      // Ajustar según humedad
+      if (errorHum > 0) {
+        // Necesitamos más humedad
+        if (matHum > currentHum) adjustment += learningRate * errorHum / 50;
+        else adjustment -= learningRate * errorHum / 50;
+      } else {
+        // Necesitamos menos humedad
+        if (matHum < currentHum) adjustment -= learningRate * errorHum / 50;
+        else adjustment += learningRate * errorHum / 50;
+      }
+      
+      return adjustment;
+    });
+    
+    // Aplicar ajustes
+    proportions = proportions.map((p, i) => Math.max(0, p + adjustments[i]));
+    
+    // Normalizar a 100%
+    const sum = proportions.reduce((a, b) => a + b, 0);
+    if (sum > 0) {
+      proportions = proportions.map(p => (p / sum) * 100);
+    }
+  }
+  
+  // Redondear y asegurar que suma 100
+  proportions = proportions.map(p => Math.round(p * 10) / 10);
+  const sum = proportions.reduce((a, b) => a + b, 0);
+  if (sum !== 100 && proportions.length > 0) {
+    const diff = 100 - sum;
+    proportions[0] += diff;
+    proportions[0] = Math.round(proportions[0] * 10) / 10;
+  }
+  
+  return materials.map((mat, i) => ({
+    ...mat,
+    proportion: proportions[i]
+  }));
+}
+
 function buildRecommendation(cn, hum) {
   if (cn < IDEAL_CN[0]) return "⚠️ Demasiado nitrógeno. Añade material seco (paja, poda).";
   if (cn > IDEAL_CN[1]) return "⚠️ Demasiado carbono. Añade material fresco (restos de cocina, estiércol).";
@@ -78,6 +173,7 @@ export default function App() {
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [savedMixes, setSavedMixes] = useState([]);
+  const [optimizing, setOptimizing] = useState(false);
 
   useEffect(() => {
     const savedCustom = localStorage.getItem('customMaterials');
@@ -112,6 +208,26 @@ export default function App() {
   };
 
   const optimizeMix = () => {
+    if (selected.length < 2) {
+      alert("Selecciona al menos 2 materiales para optimizar");
+      return;
+    }
+    
+    setOptimizing(true);
+    
+    // Usar setTimeout para permitir que la UI se actualice
+    setTimeout(() => {
+      const optimized = optimizeMixSmart(selected);
+      setSelected(optimized);
+      setOptimizing(false);
+      
+      // Calcular y mostrar resultados
+      const newStats = calculateMix(optimized);
+      alert(`✨ Optimización completada!\n\nC/N: ${newStats.cn} ${newStats.cn >= IDEAL_CN[0] && newStats.cn <= IDEAL_CN[1] ? '✓' : ''}\nHumedad: ${newStats.hum}% ${newStats.hum >= IDEAL_HUM[0] && newStats.hum <= IDEAL_HUM[1] ? '✓' : ''}`);
+    }, 100);
+  };
+
+  const distributeEqually = () => {
     if (selected.length < 2) return;
     const equal = +(100 / selected.length).toFixed(1);
     setSelected(prev => prev.map(m => ({ ...m, proportion: equal })));
@@ -143,23 +259,33 @@ export default function App() {
 
   const exportMix = () => {
     if (selected.length === 0) return;
-    const text = `COMPOSTMASTER - RECETA
+    const text = `COMPOSTMASTER - RECETA OPTIMIZADA
 Fecha: ${new Date().toLocaleDateString()}
 
 MATERIALES:
 ${selected.map((m, i) => `${i + 1}. ${m.name}: ${m.proportion}% (${(m.proportion / 10).toFixed(1)} partes)`).join('\n')}
 
 RESULTADOS:
-• C/N: ${stats.cn} ${cnOk ? '✓' : '⚠'}
-• Humedad: ${stats.hum}% ${humOk ? '✓' : '⚠'}
+• C/N: ${stats.cn} ${cnOk ? '✓ ÓPTIMO' : '⚠ AJUSTAR'}
+  Rango ideal: ${IDEAL_CN[0]}-${IDEAL_CN[1]}
+  
+• Humedad: ${stats.hum}% ${humOk ? '✓ ÓPTIMO' : '⚠ AJUSTAR'}
+  Rango ideal: ${IDEAL_HUM[0]}-${IDEAL_HUM[1]}%
 
 ${buildRecommendation(stats.cn, stats.hum)}
+
+PARÁMETROS DE REFERENCIA:
+• Relación C/N: 20-30
+• Humedad: 50-60%
+• pH: 5.0-8.5
+• Salinidad (CE): < 4 dS/m
+• Temperatura (termófila): 55-65°C
 `;
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Compost_${Date.now()}.txt`;
+    a.download = `CompostMaster_${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -175,55 +301,56 @@ ${buildRecommendation(stats.cn, stats.hum)}
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', padding: '20px' }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '100%', margin: '0 auto', width: '100%' }}>
         
         {/* HEADER */}
-        <div style={{ background: 'white', borderRadius: '24px', padding: '32px', marginBottom: '24px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '64px', height: '64px', background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}>
-                <Leaf size={36} color="white" strokeWidth={3} />
+        <div style={{ background: 'white', borderRadius: '24px', padding: '40px', marginBottom: '32px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <div style={{ width: '80px', height: '80px', background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}>
+                <Leaf size={44} color="white" strokeWidth={3} />
               </div>
               <div>
-                <h1 style={{ fontSize: '42px', fontWeight: '900', color: '#111827', margin: 0, lineHeight: 1 }}>
+                <h1 style={{ fontSize: '52px', fontWeight: '900', color: '#111827', margin: 0, lineHeight: 1 }}>
                   Compost<span style={{ color: '#10b981' }}>Master</span>
                 </h1>
-                <p style={{ fontSize: '16px', color: '#6b7280', fontWeight: '600', margin: '4px 0 0 0' }}>
+                <p style={{ fontSize: '20px', color: '#6b7280', fontWeight: '600', margin: '8px 0 0 0' }}>
                   Calculadora Profesional de Compostaje
                 </p>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
               {savedMixes.length > 0 && (
-                <button onClick={() => setShowHistory(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 20px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}>
-                  <History size={20} /> Mis Mezclas ({savedMixes.length})
+                <button onClick={() => setShowHistory(true)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '18px 24px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', borderRadius: '14px', fontSize: '17px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}>
+                  <History size={24} /> Mis Mezclas ({savedMixes.length})
                 </button>
               )}
-              <button onClick={() => setShowCustomModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '14px 20px', background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)' }}>
-                <Plus size={20} /> Personalizado
+              <button onClick={() => setShowCustomModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '18px 24px', background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', color: 'white', border: 'none', borderRadius: '14px', fontSize: '17px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)' }}>
+                <Plus size={24} /> Personalizado
               </button>
             </div>
           </div>
         </div>
 
         {/* FACTORES IDEALES */}
-        <details style={{ background: 'white', borderRadius: '20px', padding: '24px', marginBottom: '24px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-          <summary style={{ fontSize: '20px', fontWeight: '800', cursor: 'pointer', color: '#111827', listStyle: 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '28px' }}>📊</span>
+        <details style={{ background: 'white', borderRadius: '20px', padding: '32px', marginBottom: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+          <summary style={{ fontSize: '24px', fontWeight: '800', cursor: 'pointer', color: '#111827', listStyle: 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '32px' }}>📊</span>
             Factores Ideales para el Compostaje
             <span style={{ marginLeft: 'auto', color: '#10b981' }}>▼</span>
           </summary>
-          <div style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+          <div style={{ marginTop: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
             {[
-              { label: "Relación C/N", value: "20-30", bg: '#d1fae5' },
-              { label: "Humedad", value: "50-60%", bg: '#dbeafe' },
-              { label: "pH", value: "5,0-8,5", bg: '#e9d5ff' },
-              { label: "Salinidad", value: "< 4 dS/m", bg: '#fed7aa' },
-              { label: "Temperatura", value: "55-65°C", bg: '#fecaca' },
+              { label: "Relación C/N", value: "20-30", bg: '#d1fae5', detail: "Objetivo: 25" },
+              { label: "Humedad", value: "50-60%", bg: '#dbeafe', detail: "Objetivo: 55%" },
+              { label: "pH", value: "5,0-8,5", bg: '#e9d5ff', detail: "Neutro ideal" },
+              { label: "Salinidad", value: "< 4 dS/m", bg: '#fed7aa', detail: "Baja salinidad" },
+              { label: "Temperatura", value: "55-65°C", bg: '#fecaca', detail: "Fase termófila" },
             ].map((item, i) => (
-              <div key={i} style={{ background: item.bg, padding: '16px', borderRadius: '12px', border: '3px solid rgba(0,0,0,0.08)' }}>
-                <div style={{ fontSize: '12px', fontWeight: '700', color: '#374151', marginBottom: '4px' }}>{item.label}</div>
-                <div style={{ fontSize: '24px', fontWeight: '900', color: '#111827' }}>{item.value}</div>
+              <div key={i} style={{ background: item.bg, padding: '20px', borderRadius: '16px', border: '3px solid rgba(0,0,0,0.08)' }}>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: '#374151', marginBottom: '6px' }}>{item.label}</div>
+                <div style={{ fontSize: '28px', fontWeight: '900', color: '#111827', marginBottom: '6px' }}>{item.value}</div>
+                <div style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280' }}>{item.detail}</div>
               </div>
             ))}
           </div>
@@ -232,9 +359,9 @@ ${buildRecommendation(stats.cn, stats.hum)}
         <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth > 1024 ? '1fr 1fr' : '1fr', gap: '24px' }}>
           
           {/* SELECCIÓN DE MATERIALES */}
-          <div style={{ background: 'white', borderRadius: '20px', padding: '28px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-            <h2 style={{ fontSize: '28px', fontWeight: '900', color: '#111827', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '32px' }}>1️⃣</span> Selecciona Materiales
+          <div style={{ background: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+            <h2 style={{ fontSize: '32px', fontWeight: '900', color: '#111827', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '36px' }}>1️⃣</span> Selecciona Materiales
             </h2>
             
             {MATERIAL_GROUPS.map(group => {
@@ -296,9 +423,9 @@ ${buildRecommendation(stats.cn, stats.hum)}
             {selected.length > 0 ? (
               <>
                 {/* AJUSTAR PROPORCIONES */}
-                <div style={{ background: 'white', borderRadius: '20px', padding: '28px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', marginBottom: '24px' }}>
-                  <h2 style={{ fontSize: '28px', fontWeight: '900', color: '#111827', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '32px' }}>2️⃣</span> Ajustar Proporciones
+                <div style={{ background: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', marginBottom: '32px' }}>
+                  <h2 style={{ fontSize: '32px', fontWeight: '900', color: '#111827', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '36px' }}>2️⃣</span> Ajustar Proporciones
                   </h2>
 
                   {Math.abs(totalProportion - 100) > 0.1 && (
@@ -313,10 +440,30 @@ ${buildRecommendation(stats.cn, stats.hum)}
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
-                    <button onClick={optimizeMix} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '16px', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}>
-                      <Sparkles size={20} /> Distribuir
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                    <button 
+                      onClick={optimizeMix} 
+                      disabled={optimizing}
+                      style={{ 
+                        flex: 1,
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        gap: '8px', 
+                        padding: '16px', 
+                        background: optimizing ? '#9ca3af' : 'linear-gradient(135deg, #f59e0b, #d97706)', 
+                        color: 'white', 
+                        border: 'none', 
+                        borderRadius: '12px', 
+                        fontSize: '16px', 
+                        fontWeight: '700', 
+                        cursor: optimizing ? 'not-allowed' : 'pointer', 
+                        boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)' 
+                      }}
+                    >
+                      <Zap size={20} /> {optimizing ? 'Optimizando...' : '⚡ Optimizar Mezcla'}
                     </button>
+                    
                     <button onClick={clearAll} style={{ padding: '16px 20px', background: 'white', color: '#ef4444', border: '3px solid #ef4444', borderRadius: '12px', fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
                       Limpiar
                     </button>
@@ -345,10 +492,10 @@ ${buildRecommendation(stats.cn, stats.hum)}
                 </div>
 
                 {/* RESULTADOS */}
-                <div style={{ background: 'white', borderRadius: '20px', padding: '28px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                    <h2 style={{ fontSize: '28px', fontWeight: '900', color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontSize: '32px' }}>3️⃣</span> Resultados
+                <div style={{ background: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+                    <h2 style={{ fontSize: '32px', fontWeight: '900', color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '36px' }}>3️⃣</span> Resultados
                     </h2>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button onClick={saveMix} style={{ padding: '10px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)' }}>
@@ -401,42 +548,42 @@ ${buildRecommendation(stats.cn, stats.hum)}
                   </div>
 
                   {/* MÉTRICAS */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '28px' }}>
                     <div style={{ 
                       background: cnOk ? 'linear-gradient(135deg, #d1fae5, #a7f3d0)' : 'linear-gradient(135deg, #fef3c7, #fde68a)',
-                      padding: '24px',
-                      borderRadius: '16px',
+                      padding: '32px',
+                      borderRadius: '20px',
                       border: cnOk ? '3px solid #10b981' : '3px solid #fbbf24',
                       textAlign: 'center'
                     }}>
-                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#374151', marginBottom: '8px' }}>RELACIÓN C/N</div>
-                      <div style={{ fontSize: '48px', fontWeight: '900', color: cnOk ? '#059669' : '#d97706', lineHeight: 1 }}>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: '#374151', marginBottom: '12px' }}>RELACIÓN C/N</div>
+                      <div style={{ fontSize: '64px', fontWeight: '900', color: cnOk ? '#059669' : '#d97706', lineHeight: 1 }}>
                         {stats.cn}
                       </div>
-                      <div style={{ fontSize: '13px', fontWeight: '800', color: cnOk ? '#059669' : '#d97706', marginTop: '8px' }}>
+                      <div style={{ fontSize: '16px', fontWeight: '800', color: cnOk ? '#059669' : '#d97706', marginTop: '12px' }}>
                         {cnOk ? "✓ ÓPTIMO" : "⚠ AJUSTAR"}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', marginTop: '4px' }}>
-                        Ideal: {IDEAL_CN[0]}-{IDEAL_CN[1]}
+                      <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
+                        Ideal: {IDEAL_CN[0]}-{IDEAL_CN[1]} · Objetivo: {TARGET_CN}
                       </div>
                     </div>
 
                     <div style={{ 
                       background: humOk ? 'linear-gradient(135deg, #dbeafe, #bfdbfe)' : 'linear-gradient(135deg, #fef3c7, #fde68a)',
-                      padding: '24px',
-                      borderRadius: '16px',
+                      padding: '32px',
+                      borderRadius: '20px',
                       border: humOk ? '3px solid #3b82f6' : '3px solid #fbbf24',
                       textAlign: 'center'
                     }}>
-                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#374151', marginBottom: '8px' }}>HUMEDAD</div>
-                      <div style={{ fontSize: '48px', fontWeight: '900', color: humOk ? '#1d4ed8' : '#d97706', lineHeight: 1 }}>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: '#374151', marginBottom: '12px' }}>HUMEDAD</div>
+                      <div style={{ fontSize: '64px', fontWeight: '900', color: humOk ? '#1d4ed8' : '#d97706', lineHeight: 1 }}>
                         {stats.hum}%
                       </div>
-                      <div style={{ fontSize: '13px', fontWeight: '800', color: humOk ? '#1d4ed8' : '#d97706', marginTop: '8px' }}>
+                      <div style={{ fontSize: '16px', fontWeight: '800', color: humOk ? '#1d4ed8' : '#d97706', marginTop: '12px' }}>
                         {humOk ? "✓ ÓPTIMO" : "⚠ AJUSTAR"}
                       </div>
-                      <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600', marginTop: '4px' }}>
-                        Ideal: {IDEAL_HUM[0]}-{IDEAL_HUM[1]}%
+                      <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
+                        Ideal: {IDEAL_HUM[0]}-{IDEAL_HUM[1]}% · Objetivo: {TARGET_HUM}%
                       </div>
                     </div>
                   </div>
@@ -477,7 +624,7 @@ ${buildRecommendation(stats.cn, stats.hum)}
           </div>
         </div>
 
-        {/* MODALES */}
+        {/* MODALES - (igual que antes, sin cambios)  */}
         {showCustomModal && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 50 }}>
             <div style={{ background: 'white', borderRadius: '24px', maxWidth: '500px', width: '100%', padding: '32px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
@@ -523,7 +670,7 @@ ${buildRecommendation(stats.cn, stats.hum)}
                   <strong style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                     <Info size={16} /> Nota:
                   </strong>
-                  Estos valores se obtienen por análisis de laboratorio. Si no los conoces, usa materiales similares.
+                  Estos valores se obtienen por análisis de laboratorio.
                 </div>
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button type="button" onClick={() => setShowCustomModal(false)} style={{ flex: 1, padding: '16px', background: 'white', color: '#374151', border: '3px solid #d1d5db', borderRadius: '12px', fontSize: '16px', fontWeight: '800', cursor: 'pointer' }}>
@@ -589,14 +736,6 @@ ${buildRecommendation(stats.cn, stats.hum)}
             </div>
           </div>
         )}
-
-        {/* FOOTER */}
-        <div style={{ marginTop: '48px', textAlign: 'center' }}>
-          <div style={{ display: 'inline-block', background: 'white', borderRadius: '16px', padding: '20px 32px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-            <p style={{ fontSize: '16px', fontWeight: '800', color: '#111827', margin: '0 0 4px 0' }}>CompostMaster · Metodología UMH</p>
-            <p style={{ fontSize: '14px', color: '#6b7280', fontWeight: '600', margin: 0 }}>Gestión sostenible de residuos orgánicos 🌍</p>
-          </div>
-        </div>
       </div>
 
       <style>{`

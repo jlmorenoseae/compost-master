@@ -317,6 +317,12 @@ PARÁMETROS DE REFERENCIA:
                 <p style={{ fontSize: '20px', color: '#6b7280', fontWeight: '600', margin: '8px 0 0 0' }}>
                   Calculadora Profesional de Compostaje
                 </p>
+                <p style={{ fontSize: '15px', color: '#6b7280', fontWeight: '600', margin: '6px 0 0 0' }}>
+                  Una aplicación de{' '}
+                  <a href="https://www.agroecologia.net/" target="_blank" rel="noopener noreferrer" style={{ color: '#059669', fontWeight: '800', textDecoration: 'none' }}>
+                    Sociedad Española de Agricultura Ecológica y Agroecología (SEAE)
+                  </a>
+                </p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
@@ -628,12 +634,18 @@ PARÁMETROS DE REFERENCIA:
         <footer style={{ marginTop: '32px', background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', textAlign: 'center', color: '#4b5563', fontSize: '14px', lineHeight: 1.6 }}>
           <p style={{ margin: 0, fontWeight: '600' }}>
             CompostMaster es una aplicación de la{' '}
-            <a href="https://www.agroecologia.net" target="_blank" rel="noopener noreferrer" style={{ color: '#059669', fontWeight: '700' }}>
-              Sociedad Española de Agricultura Ecológica (SEAE)
+            <a href="https://www.agroecologia.net/" target="_blank" rel="noopener noreferrer" style={{ color: '#059669', fontWeight: '700' }}>
+              Sociedad Española de Agricultura Ecológica y Agroecología (SEAE)
             </a>.
           </p>
           <p style={{ margin: '4px 0 0 0' }}>
             © 2026 SEAE. Todos los derechos reservados. Acceso y uso gratuito y público de la herramienta.
+          </p>
+          <p style={{ margin: '4px 0 0 0' }}>
+            Contacto:{' '}
+            <a href="mailto:comunicacion@agroecologia.net" style={{ color: '#059669', fontWeight: '700' }}>comunicacion@agroecologia.net</a>
+            {' · '}Tlf:{' '}
+            <a href="tel:+34961267122" style={{ color: '#059669', fontWeight: '700' }}>961 267 122</a>
           </p>
         </footer>
 

@@ -624,6 +624,19 @@ PARÁMETROS DE REFERENCIA:
           </div>
         </div>
 
+        {/* PIE: TITULARIDAD Y DERECHOS */}
+        <footer style={{ marginTop: '32px', background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', textAlign: 'center', color: '#4b5563', fontSize: '14px', lineHeight: 1.6 }}>
+          <p style={{ margin: 0, fontWeight: '600' }}>
+            CompostMaster es una aplicación de la{' '}
+            <a href="https://www.agroecologia.net" target="_blank" rel="noopener noreferrer" style={{ color: '#059669', fontWeight: '700' }}>
+              Sociedad Española de Agricultura Ecológica (SEAE)
+            </a>.
+          </p>
+          <p style={{ margin: '4px 0 0 0' }}>
+            © 2026 SEAE. Todos los derechos reservados. Acceso y uso gratuito y público de la herramienta.
+          </p>
+        </footer>
+
         {/* MODALES - (igual que antes, sin cambios)  */}
         {showCustomModal && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 50 }}>

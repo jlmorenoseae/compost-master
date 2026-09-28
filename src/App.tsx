@@ -6,6 +6,54 @@ const IDEAL_CN = [20, 30];
 const IDEAL_HUM = [50, 60];
 const TARGET_CN = 25; // Objetivo óptimo
 const TARGET_HUM = 55; // Objetivo óptimo
+// pH: Rynk et al. (1992) On-Farm Composting Handbook, NRAES-54. Razonable 5,5-9,0; preferido 6,5-8,0
+const PH_OK = [5.5, 9.0];
+const PH_PREF = [6.5, 8.0];
+const CE_MAX = 4; // dS/m, valor de referencia que ya usaba la app
+
+// pH y CE (dS/m) de materias primas. Solo valores con referencia publicada; el resto queda sin dato.
+// acid: true = la fuente indica carácter ácido pero sin cifra.
+const PH_CE_DATA = {
+  "61": { ph: 8.51, ce: 11.33, src: "Tortosa et al. 2012 (extracto 1:10)" },
+  "62": { ph: 8.51, ce: 11.33, src: "Tortosa et al. 2012, estiércol ovino/caprino (extracto 1:10)" },
+  "66": { ph: 7.24, ce: 16.74, src: "Compostando Ciencia (EEZ-CSIC)" },
+  "64": { ph: 7.76, ce: 9.47, src: "Vida Rural (MAPA) 2009, gallina ponedora" },
+  "67": { ph: 8.24, ce: 9.3, src: "Vida Rural (MAPA) 2009, pollo de engorde" },
+  "22": { ph: 5.29, ce: 6.66, src: "Appl. Biol. Chem. 2024" },
+  "20": { ph: 5.41, ce: 7.44, src: "Appl. Biol. Chem. 2024 (residuo deshidratado)" },
+  "46": { ph: 3.95, ce: null, src: "BioResources 2022" },
+  "40": { ph: null, ce: null, acid: true, src: "BIO Web Conf. 2014: pH < 6,5 en todas las muestras" },
+  "43": { ph: null, ce: null, acid: true, src: "Junta de Andalucía 2006 (alperujo): ligeramente ácido, CE alta" }
+};
+
+function phCeLabel(id) {
+  const d = PH_CE_DATA[id];
+  const ph = d ? (d.ph != null ? d.ph : (d.acid ? 'ácido' : 's/d')) : 's/d';
+  const ce = d && d.ce != null ? `${d.ce} dS/m` : 's/d';
+  return `pH: ${ph} · CE: ${ce}`;
+}
+
+function calculatePhCe(materials) {
+  let phW = 0, phSum = 0, ceW = 0, ceSum = 0, total = 0, noData = 0;
+  const acidNoFigure = [];
+  materials.forEach(m => {
+    const p = m.proportion || 0;
+    if (p <= 0) return;
+    total += p;
+    const dry = p * (1 - m.humidity / 100); // ponderación por materia seca
+    const d = PH_CE_DATA[m.id];
+    if (!d || (d.ph == null && d.ce == null)) noData += p;
+    if (d && d.acid) acidNoFigure.push(m.name);
+    if (d && d.ph != null) { phW += dry; phSum += dry * d.ph; }
+    if (d && d.ce != null) { ceW += dry; ceSum += dry * d.ce; }
+  });
+  return {
+    ph: phW > 0 ? +(phSum / phW).toFixed(1) : null,
+    ce: ceW > 0 ? +(ceSum / ceW).toFixed(1) : null,
+    noDataPct: total > 0 ? Math.round((noData / total) * 100) : 0,
+    acidNoFigure
+  };
+}
 const MATERIAL_GROUPS = ["Agrícola", "Urbano", "Industrial", "Ganadero"];
 
 const BASE_MATERIALS = [
@@ -189,6 +237,14 @@ export default function App() {
 
   const allMaterials = BASE_MATERIALS;
   const stats = useMemo(() => calculateMix(selected), [selected]);
+  const phce = useMemo(() => calculatePhCe(selected), [selected]);
+  const phWarnings = [];
+  if (phce.ph != null) {
+    if (phce.ph < PH_OK[0] || phce.ph > PH_OK[1]) phWarnings.push(`pH estimado ${phce.ph}: fuera del rango razonable (${PH_OK[0]}-${PH_OK[1]}). Corrige la mezcla con materiales de pH opuesto.`);
+    else if (phce.ph < PH_PREF[0] || phce.ph > PH_PREF[1]) phWarnings.push(`pH estimado ${phce.ph}: dentro del rango razonable pero fuera del preferido (${PH_PREF[0]}-${PH_PREF[1]}). Vigila el arranque del proceso.`);
+  }
+  if (phce.acidNoFigure.length > 0) phWarnings.push(`Contiene materiales de carácter ácido sin valor numérico: ${phce.acidNoFigure.join(', ')}.`);
+  if (phce.ce != null && phce.ce > CE_MAX) phWarnings.push(`CE estimada ${phce.ce} dS/m: por encima de ${CE_MAX} dS/m. Riesgo de salinidad en el compost; reduce la proporción de materiales salinos.`);
   const totalProportion = useMemo(() => selected.reduce((sum, m) => sum + m.proportion, 0), [selected]);
 
   const cnOk = stats.cn >= IDEAL_CN[0] && stats.cn <= IDEAL_CN[1];
@@ -273,10 +329,16 @@ RESULTADOS:
 
 ${buildRecommendation(stats.cn, stats.hum)}
 
+pH Y SALINIDAD (orientativo):
+• pH estimado: ${phce.ph != null ? phce.ph : 'sin dato'}
+• CE estimada: ${phce.ce != null ? phce.ce + ' dS/m' : 'sin dato'}
+• Parte de la mezcla sin datos: ${phce.noDataPct}%
+${phWarnings.map(w => '⚠ ' + w).join('\n')}
+
 PARÁMETROS DE REFERENCIA:
 • Relación C/N: 20-30
 • Humedad: 50-60%
-• pH: 5.0-8.5
+• pH: 5,5-9,0 (preferido 6,5-8,0)
 • Salinidad (CE): < 4 dS/m
 • Temperatura (termófila): 55-65°C
 `;
@@ -340,7 +402,7 @@ PARÁMETROS DE REFERENCIA:
             {[
               { label: "Relación C/N", value: "20-30", bg: '#d1fae5', detail: "Objetivo: 25" },
               { label: "Humedad", value: "50-60%", bg: '#dbeafe', detail: "Objetivo: 55%" },
-              { label: "pH", value: "5,0-8,5", bg: '#e9d5ff', detail: "Neutro ideal" },
+              { label: "pH", value: "5,5-9,0", bg: '#e9d5ff', detail: "Preferido 6,5-8,0" },
               { label: "Salinidad", value: "< 4 dS/m", bg: '#fed7aa', detail: "Baja salinidad" },
               { label: "Temperatura", value: "55-65°C", bg: '#fecaca', detail: "Fase termófila" },
             ].map((item, i) => (
@@ -401,7 +463,7 @@ PARÁMETROS DE REFERENCIA:
                                   {mat.name}
                                 </div>
                                 <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
-                                  C/N: {cn} · Humedad: {mat.humidity}%
+                                  C/N: {cn} · Humedad: {mat.humidity}% · {phCeLabel(mat.id)}
                                 </div>
                               </div>
                             </div>
@@ -583,7 +645,51 @@ PARÁMETROS DE REFERENCIA:
                         Ideal: {IDEAL_HUM[0]}-{IDEAL_HUM[1]}% · Objetivo: {TARGET_HUM}%
                       </div>
                     </div>
+
+                    <div style={{ background: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? 'linear-gradient(135deg, #f3e8ff, #e9d5ff)' : 'linear-gradient(135deg, #fef3c7, #fde68a)', padding: '32px', borderRadius: '20px', border: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? '3px solid #a855f7' : '3px solid #fbbf24', textAlign: 'center' }}>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: '#374151', marginBottom: '12px' }}>pH</div>
+                      <div style={{ fontSize: '64px', fontWeight: '900', color: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? '#7e22ce' : '#d97706', lineHeight: 1 }}>
+                        {phce.ph != null ? phce.ph : 's/d'}
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: '800', color: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? '#7e22ce' : '#d97706', marginTop: '12px' }}>
+                        {(phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? "✓ ORIENTATIVO" : "⚠ REVISAR"}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
+                        Razonable: {PH_OK[0]}-{PH_OK[1]} · Preferido: {PH_PREF[0]}-{PH_PREF[1]}
+                      </div>
+                    </div>
+
+                    <div style={{ background: (phce.ce == null || phce.ce <= CE_MAX) ? 'linear-gradient(135deg, #f3e8ff, #e9d5ff)' : 'linear-gradient(135deg, #fef3c7, #fde68a)', padding: '32px', borderRadius: '20px', border: (phce.ce == null || phce.ce <= CE_MAX) ? '3px solid #a855f7' : '3px solid #fbbf24', textAlign: 'center' }}>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: '#374151', marginBottom: '12px' }}>SALINIDAD (CE)</div>
+                      <div style={{ fontSize: '64px', fontWeight: '900', color: (phce.ce == null || phce.ce <= CE_MAX) ? '#7e22ce' : '#d97706', lineHeight: 1 }}>
+                        {phce.ce != null ? phce.ce : 's/d'}
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: '800', color: (phce.ce == null || phce.ce <= CE_MAX) ? '#7e22ce' : '#d97706', marginTop: '12px' }}>
+                        {(phce.ce == null || phce.ce <= CE_MAX) ? "✓ ORIENTATIVO" : "⚠ REVISAR"}
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
+                        dS/m · Máximo: {CE_MAX}
+                      </div>
+                    </div>
                   </div>
+
+                  {/* pH Y SALINIDAD */}
+                  {selected.length > 0 && (
+                    <div style={{ background: phWarnings.length ? 'linear-gradient(135deg, #fef3c7, #fde68a)' : '#f9fafb', padding: '24px', borderRadius: '16px', border: phWarnings.length ? '3px solid #fbbf24' : '3px solid #e5e7eb', marginBottom: '28px' }}>
+                      <div style={{ fontWeight: '900', fontSize: '18px', color: '#111827', marginBottom: '10px' }}>pH y salinidad (orientativo)</div>
+                      <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '10px' }}>
+                        <span>Mezcla sin datos: {phce.noDataPct}%</span>
+                      </div>
+                      {phWarnings.map((w, i) => (
+                        <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'start', fontSize: '14px', fontWeight: '700', color: '#92400e', marginBottom: '6px' }}>
+                          <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '1px' }} /> <span>{w}</span>
+                        </div>
+                      ))}
+                      <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginTop: '8px' }}>
+                        Media ponderada por materia seca, solo con los materiales que tienen dato bibliográfico. El pH real de una mezcla no es una media, y las fuentes usan métodos de extracción distintos: tómalo como indicación, no como analítica.
+                      </div>
+                    </div>
+                  )}
 
                   {/* RECOMENDACIÓN */}
                   <div style={{ 

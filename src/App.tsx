@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Trash2, Download, Save, Plus, History, X, CheckCircle2, Leaf, Info, AlertCircle, Zap } from "lucide-react";
+import { Trash2, Download, Save, History, X, CheckCircle2, Leaf, Info, AlertCircle, Zap } from "lucide-react";
 
 // CONSTANTES
 const IDEAL_CN = [20, 30];
@@ -169,26 +169,17 @@ function buildRecommendation(cn, hum) {
 
 export default function App() {
   const [selected, setSelected] = useState([]);
-  const [customMaterials, setCustomMaterials] = useState([]);
-  const [showCustomModal, setShowCustomModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [savedMixes, setSavedMixes] = useState([]);
   const [optimizing, setOptimizing] = useState(false);
 
   useEffect(() => {
-    const savedCustom = localStorage.getItem('customMaterials');
+    localStorage.removeItem('customMaterials');
     const savedMixesData = localStorage.getItem('savedMixes');
-    if (savedCustom) setCustomMaterials(JSON.parse(savedCustom));
     if (savedMixesData) setSavedMixes(JSON.parse(savedMixesData));
   }, []);
 
-  useEffect(() => {
-    if (customMaterials.length > 0) {
-      localStorage.setItem('customMaterials', JSON.stringify(customMaterials));
-    }
-  }, [customMaterials]);
-
-  const allMaterials = useMemo(() => [...BASE_MATERIALS, ...customMaterials], [customMaterials]);
+  const allMaterials = BASE_MATERIALS;
   const stats = useMemo(() => calculateMix(selected), [selected]);
   const totalProportion = useMemo(() => selected.reduce((sum, m) => sum + m.proportion, 0), [selected]);
 
@@ -204,7 +195,7 @@ export default function App() {
   };
 
   const updateProp = (id, value) => {
-    setSelected(prev => prev.map(m => (m.id === id ? { ...m, proportion: Number(value) || 0 } : m)));
+    setSelected(prev => prev.map(m => (m.id === id ? { ...m, proportion: Math.min(100, Math.max(0, Number(value) || 0)) } : m)));
   };
 
   const optimizeMix = () => {
@@ -294,11 +285,6 @@ PARÁMETROS DE REFERENCIA:
     if (confirm("¿Limpiar toda la mezcla?")) setSelected([]);
   };
 
-  const addCustomMaterial = (mat) => {
-    setCustomMaterials(prev => [...prev, mat]);
-    toggleMaterial(mat);
-  };
-
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', padding: '20px' }}>
       <div style={{ maxWidth: '100%', margin: '0 auto', width: '100%' }}>
@@ -315,7 +301,7 @@ PARÁMETROS DE REFERENCIA:
                   Compost<span style={{ color: '#10b981' }}>Master</span>
                 </h1>
                 <p style={{ fontSize: '20px', color: '#6b7280', fontWeight: '600', margin: '8px 0 0 0' }}>
-                  Calculadora Profesional de Compostaje
+                  Calculadora de Compostaje
                 </p>
                 <p style={{ fontSize: '15px', color: '#6b7280', fontWeight: '600', margin: '6px 0 0 0' }}>
                   Una aplicación de{' '}
@@ -331,9 +317,6 @@ PARÁMETROS DE REFERENCIA:
                   <History size={24} /> Mis Mezclas ({savedMixes.length})
                 </button>
               )}
-              <button onClick={() => setShowCustomModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '18px 24px', background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)', color: 'white', border: 'none', borderRadius: '14px', fontSize: '17px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)' }}>
-                <Plus size={24} /> Personalizado
-              </button>
             </div>
           </div>
         </div>
@@ -650,65 +633,6 @@ PARÁMETROS DE REFERENCIA:
         </footer>
 
         {/* MODALES - (igual que antes, sin cambios)  */}
-        {showCustomModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 50 }}>
-            <div style={{ background: 'white', borderRadius: '24px', maxWidth: '500px', width: '100%', padding: '32px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h3 style={{ fontSize: '24px', fontWeight: '900', color: '#111827', margin: 0 }}>Nuevo Material</h3>
-                <button onClick={() => setShowCustomModal(false)} style={{ background: '#f3f4f6', border: 'none', borderRadius: '8px', padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <X size={24} />
-                </button>
-              </div>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                addCustomMaterial({
-                  id: `custom-${Date.now()}`,
-                  group: "Personalizado",
-                  name: formData.get('name'),
-                  C: parseFloat(formData.get('C')),
-                  N: parseFloat(formData.get('N')),
-                  humidity: parseFloat(formData.get('humidity')),
-                  isCustom: true
-                });
-                setShowCustomModal(false);
-              }}>
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', fontSize: '14px', fontWeight: '800', color: '#374151', marginBottom: '8px' }}>Nombre del material</label>
-                  <input name="name" required style={{ width: '100%', padding: '14px', border: '3px solid #e5e7eb', borderRadius: '12px', fontSize: '15px', fontWeight: '600' }} placeholder="Ej: Restos de poda" />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '20px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#374151', marginBottom: '8px' }}>% Carbono</label>
-                    <input name="C" type="number" step="0.1" required style={{ width: '100%', padding: '12px', border: '3px solid #e5e7eb', borderRadius: '10px', fontSize: '16px', fontWeight: '700', textAlign: 'center' }} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#374151', marginBottom: '8px' }}>% Nitrógeno</label>
-                    <input name="N" type="number" step="0.1" required style={{ width: '100%', padding: '12px', border: '3px solid #e5e7eb', borderRadius: '10px', fontSize: '16px', fontWeight: '700', textAlign: 'center' }} />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#374151', marginBottom: '8px' }}>% Humedad</label>
-                    <input name="humidity" type="number" step="1" required style={{ width: '100%', padding: '12px', border: '3px solid #e5e7eb', borderRadius: '10px', fontSize: '16px', fontWeight: '700', textAlign: 'center' }} />
-                  </div>
-                </div>
-                <div style={{ background: '#dbeafe', border: '3px solid #3b82f6', borderRadius: '12px', padding: '16px', marginBottom: '20px', fontSize: '13px', color: '#1e40af', fontWeight: '600' }}>
-                  <strong style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <Info size={16} /> Nota:
-                  </strong>
-                  Estos valores se obtienen por análisis de laboratorio.
-                </div>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <button type="button" onClick={() => setShowCustomModal(false)} style={{ flex: 1, padding: '16px', background: 'white', color: '#374151', border: '3px solid #d1d5db', borderRadius: '12px', fontSize: '16px', fontWeight: '800', cursor: 'pointer' }}>
-                    Cancelar
-                  </button>
-                  <button type="submit" style={{ flex: 1, padding: '16px', background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: '800', cursor: 'pointer', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}>
-                    Añadir
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
 
         {showHistory && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 50 }}>

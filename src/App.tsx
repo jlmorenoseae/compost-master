@@ -14,27 +14,60 @@ const CE_MAX = 4; // dS/m, valor de referencia que ya usaba la app
 // pH y CE (dS/m) de materias primas. Solo valores con referencia publicada; el resto queda sin dato.
 // acid: true = la fuente indica carácter ácido pero sin cifra.
 const PH_CE_DATA = {
+  // AGRÍCOLA
+  "1":  { ph: 6.73, ce: 0.5, est: "ce", src: "pH: Fan et al. 2023 (paja de trigo). CE estimada por analogía con sarmiento (Ion et al. 2021)" },
+  "2":  { ph: 8.2, ce: 3.3, est: "both", src: "Análogo: poda + césped (Guilabert et al. 2021, UMH)" },
+  "2a": { ph: 5.41, ce: 0.5, est: "both", src: "Análogo: sarmiento de vid (Ion et al. 2021)" },
+  "2b": { ph: 5.41, ce: 0.5, est: "both", src: "Análogo: sarmiento de vid (Ion et al. 2021)" },
+  "2c": { ph: 5.41, ce: 0.5, est: "both", src: "Análogo: sarmiento de vid (Ion et al. 2021)" },
+  "2d": { ph: 5.41, ce: 0.5, src: "Ion et al. 2021, sarmiento de vid" },
+  "2e": { ph: 5.41, ce: 0.5, est: "both", src: "Análogo: sarmiento de vid (Ion et al. 2021)" },
+  "3":  { ph: 7.0, ce: 3.1, est: "ce", src: "pH: restos de maíz/trigo (revisión Agronomy/MDPI). CE: análogo restos de caña (Khater 2015)" },
+  "4":  { ph: 5.41, ce: 0.5, est: "both", src: "Análogo débil: material lignocelulósico seco (sarmiento, Ion et al. 2021)" },
+  "5":  { ph: 8.2, ce: 3.3, est: "both", src: "Análogo: poda + césped (Guilabert et al. 2021)" },
+  "6":  { ph: 8.2, ce: 3.3, est: "both", src: "Análogo: poda + césped (Guilabert et al. 2021)" },
+  "7":  { ph: 7.6, ce: 0.5, est: "both", src: "pH: análogo paja de arroz (revisión MDPI). CE: análogo lignocelulósico seco" },
+  "8":  { ph: 7.03, ce: 3.1, est: "ce", src: "pH: restos de maíz (revisión MDPI). CE: análogo restos de caña (Khater 2015)" },
+  "9":  { ph: 4.8, ce: null, est: "ph", src: "Análogo: ensilado de hierba (pH ~4,8)" },
+  "10": { ph: 8.5, ce: 5.8, est: "both", src: "Análogo: restos de posidonia, media de 4 muestras (Guilabert et al. 2021)" },
+  // URBANO
+  "20": { ph: 5.41, ce: 7.44, src: "Appl. Biol. Chem. 2024 (residuo deshidratado)" },
+  "21": { ph: 5.3, ce: null, src: "Env. Sci. Pollut. Res. 2019: fruta pH 4-5, verdura 6-6,5" },
+  "22": { ph: 5.29, ce: 6.66, src: "Appl. Biol. Chem. 2024" },
+  // INDUSTRIAL
+  "40": { ph: 3.85, ce: 2.09, src: "Ion et al. 2021, orujo de uva" },
+  "41": { ph: 5.1, ce: 3.6, est: "both", src: "Análogo: alperujo (García-Randez et al. 2023)" },
+  "42": { ph: 5.4, ce: null, src: "Assandri et al. 2021: rango bibliográfico pH 3,8-6,9 (valor medio)" },
+  "43": { ph: 5.1, ce: 3.6, src: "García-Randez et al. 2023, alperujo, media de 11 almazaras (extracto 1:10)" },
+  "44": { ph: 5.3, ce: null, est: "ph", src: "Análogo: restos de frutas y verduras" },
+  "45": { ph: 4.5, ce: null, est: "ph", src: "Análogo: residuo de fruta (pH 4-5)" },
+  "46": { ph: 3.95, ce: null, src: "BioResources 2022" },
+  "47": { ph: 6.2, ce: null, src: "Env. Sci. Pollut. Res. 2019: verdura pH 6-6,5" },
+  "48": { ph: 4.5, ce: null, est: "ph", src: "Análogo: residuo de fruta (pH 4-5)" },
+  "49": { ph: 6.3, ce: 0.1, est: "both", src: "Análogo: serrín (Waste Biomass Valor. 2021)" },
+  // GANADERO
+  "60": { ph: 8.1, ce: 4.2, src: "Khater 2015, estiércol vacuno" },
   "61": { ph: 8.51, ce: 11.33, src: "Tortosa et al. 2012 (extracto 1:10)" },
   "62": { ph: 8.51, ce: 11.33, src: "Tortosa et al. 2012, estiércol ovino/caprino (extracto 1:10)" },
-  "66": { ph: 7.24, ce: 16.74, src: "Compostando Ciencia (EEZ-CSIC)" },
+  "63": { ph: 7.5, ce: null, src: "NC State University, estiércol porcino fresco" },
   "64": { ph: 7.76, ce: 9.47, src: "Vida Rural (MAPA) 2009, gallina ponedora" },
+  "66": { ph: 7.24, ce: 16.74, src: "Compostando Ciencia (EEZ-CSIC)" },
   "67": { ph: 8.24, ce: 9.3, src: "Vida Rural (MAPA) 2009, pollo de engorde" },
-  "22": { ph: 5.29, ce: 6.66, src: "Appl. Biol. Chem. 2024" },
-  "20": { ph: 5.41, ce: 7.44, src: "Appl. Biol. Chem. 2024 (residuo deshidratado)" },
-  "46": { ph: 3.95, ce: null, src: "BioResources 2022" },
-  "40": { ph: null, ce: null, acid: true, src: "BIO Web Conf. 2014: pH < 6,5 en todas las muestras" },
-  "43": { ph: null, ce: null, acid: true, src: "Junta de Andalucía 2006 (alperujo): ligeramente ácido, CE alta" }
+  "68": { ph: 8.24, ce: 9.3, est: "both", src: "Análogo: cama de pollos de engorde" }
+  // Sin dato: cáscaras de huevo (24) y papel y cartón (25)
 };
 
 function phCeLabel(id) {
   const d = PH_CE_DATA[id];
-  const ph = d ? (d.ph != null ? d.ph : (d.acid ? 'ácido' : 's/d')) : 's/d';
-  const ce = d && d.ce != null ? `${d.ce} dS/m` : 's/d';
+  if (!d) return 'pH: s/d · CE: s/d';
+  const mark = k => (d.est === 'both' || d.est === k) ? '≈' : '';
+  const ph = d.ph != null ? mark('ph') + d.ph : 's/d';
+  const ce = d.ce != null ? `${mark('ce')}${d.ce} dS/m` : 's/d';
   return `pH: ${ph} · CE: ${ce}`;
 }
 
 function calculatePhCe(materials) {
-  let phW = 0, phSum = 0, ceW = 0, ceSum = 0, total = 0, noData = 0;
+  let phW = 0, phSum = 0, ceW = 0, ceSum = 0, total = 0, noData = 0, estimated = 0;
   const acidNoFigure = [];
   materials.forEach(m => {
     const p = m.proportion || 0;
@@ -44,6 +77,7 @@ function calculatePhCe(materials) {
     const d = PH_CE_DATA[m.id];
     if (!d || (d.ph == null && d.ce == null)) noData += p;
     if (d && d.acid) acidNoFigure.push(m.name);
+    if (d && d.est) estimated += p;
     if (d && d.ph != null) { phW += dry; phSum += dry * d.ph; }
     if (d && d.ce != null) { ceW += dry; ceSum += dry * d.ce; }
   });
@@ -51,6 +85,7 @@ function calculatePhCe(materials) {
     ph: phW > 0 ? +(phSum / phW).toFixed(1) : null,
     ce: ceW > 0 ? +(ceSum / ceW).toFixed(1) : null,
     noDataPct: total > 0 ? Math.round((noData / total) * 100) : 0,
+    estPct: total > 0 ? Math.round((estimated / total) * 100) : 0,
     acidNoFigure
   };
 }
@@ -333,6 +368,7 @@ pH Y SALINIDAD (orientativo):
 • pH estimado: ${phce.ph != null ? phce.ph : 'sin dato'}
 • CE estimada: ${phce.ce != null ? phce.ce + ' dS/m' : 'sin dato'}
 • Parte de la mezcla sin datos: ${phce.noDataPct}%
+• Parte con valores estimados por analogía: ${phce.estPct}%
 ${phWarnings.map(w => '⚠ ' + w).join('\n')}
 
 PARÁMETROS DE REFERENCIA:
@@ -679,6 +715,7 @@ PARÁMETROS DE REFERENCIA:
                       <div style={{ fontWeight: '900', fontSize: '18px', color: '#111827', marginBottom: '10px' }}>pH y salinidad (orientativo)</div>
                       <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '10px' }}>
                         <span>Mezcla sin datos: {phce.noDataPct}%</span>
+                        <span>Con valores estimados (≈): {phce.estPct}%</span>
                       </div>
                       {phWarnings.map((w, i) => (
                         <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'start', fontSize: '14px', fontWeight: '700', color: '#92400e', marginBottom: '6px' }}>
@@ -686,7 +723,7 @@ PARÁMETROS DE REFERENCIA:
                         </div>
                       ))}
                       <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginTop: '8px' }}>
-                        Media ponderada por materia seca, solo con los materiales que tienen dato bibliográfico. El pH real de una mezcla no es una media, y las fuentes usan métodos de extracción distintos: tómalo como indicación, no como analítica.
+                        Media ponderada por materia seca. Los valores marcados con ≈ son estimaciones por analogía con materiales parecidos, no datos medidos de ese material. El pH real de una mezcla no es una media, y las fuentes usan métodos de extracción distintos: tómalo como indicación, no como analítica.
                       </div>
                     </div>
                   )}

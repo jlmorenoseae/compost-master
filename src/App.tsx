@@ -6,7 +6,7 @@ const IDEAL_CN = [20, 30];
 const IDEAL_HUM = [50, 60];
 const TARGET_CN = 25; // Objetivo óptimo
 const TARGET_HUM = 55; // Objetivo óptimo
-const MATERIAL_GROUPS = ["Agrícola", "Urbano", "Industrial", "Ganadero", "Personalizado"];
+const MATERIAL_GROUPS = ["Agrícola", "Urbano", "Industrial", "Ganadero"];
 
 const BASE_MATERIALS = [
   // AGRÍCOLA
@@ -21,11 +21,15 @@ const BASE_MATERIALS = [
   { id: "4", group: "Agrícola", name: "Hojas secas", C: 60, N: 1.0, humidity: 15 },
   { id: "5", group: "Agrícola", name: "Hojas verdes", C: 25, N: 1.8, humidity: 70 },
   { id: "6", group: "Agrícola", name: "Hierba fresca", C: 20, N: 2.5, humidity: 80 },
+  // Fuente materiales 7-10, 48-49, 67-68: On-Farm Composting Handbook (Rynk et al., 1992), Tabla A.1. C = %N x C/N
+  { id: "7", group: "Agrícola", name: "Cascarilla de arroz", C: 36.3, N: 0.3, humidity: 14 },
+  { id: "8", group: "Agrícola", name: "Cañas de maíz", C: 46.6, N: 0.7, humidity: 12 },
+  { id: "9", group: "Agrícola", name: "Ensilado de maíz", C: 52.7, N: 1.3, humidity: 66 },
+  { id: "10", group: "Agrícola", name: "Algas marinas", C: 32.3, N: 1.9, humidity: 53 },
   // URBANO
   { id: "20", group: "Urbano", name: "Residuos de cocina", C: 18, N: 2.5, humidity: 85 },
   { id: "21", group: "Urbano", name: "Restos de frutas y verduras", C: 20, N: 2.2, humidity: 90 },
   { id: "22", group: "Urbano", name: "Posos de café", C: 20, N: 2.0, humidity: 80 },
-  { id: "23", group: "Urbano", name: "Bolsas de té", C: 30, N: 1.5, humidity: 70 },
   { id: "24", group: "Urbano", name: "Cáscaras de huevo", C: 15, N: 1.2, humidity: 5 },
   { id: "25", group: "Urbano", name: "Papel y cartón", C: 170, N: 0.1, humidity: 10 },
   // INDUSTRIAL
@@ -37,13 +41,17 @@ const BASE_MATERIALS = [
   { id: "45", group: "Industrial", name: "Pulpa de tomate", C: 18, N: 2.5, humidity: 90 },
   { id: "46", group: "Industrial", name: "Restos de cítricos", C: 35, N: 1.6, humidity: 75 },
   { id: "47", group: "Industrial", name: "IV gama (ensaladas)", C: 22, N: 2.1, humidity: 88 },
+  { id: "48", group: "Industrial", name: "Orujo de manzana", C: 52.8, N: 1.1, humidity: 88 },
+  { id: "49", group: "Industrial", name: "Corteza de frondosas", C: 54.0, N: 0.24, humidity: 59 },
   // GANADERO
   { id: "60", group: "Ganadero", name: "Estiércol vacuno", C: 42, N: 2.1, humidity: 75 },
   { id: "61", group: "Ganadero", name: "Estiércol ovino", C: 30, N: 2.5, humidity: 65 },
   { id: "62", group: "Ganadero", name: "Estiércol caprino", C: 28, N: 2.6, humidity: 60 },
   { id: "63", group: "Ganadero", name: "Estiércol porcino", C: 14, N: 3.5, humidity: 85 },
   { id: "64", group: "Ganadero", name: "Gallinaza", C: 10, N: 4.0, humidity: 70 },
-  { id: "66", group: "Ganadero", name: "Estiércol equino", C: 55, N: 1.4, humidity: 60 }
+  { id: "66", group: "Ganadero", name: "Estiércol equino", C: 55, N: 1.4, humidity: 60 },
+  { id: "67", group: "Ganadero", name: "Cama de pollos de engorde", C: 37.1, N: 2.75, humidity: 34 },
+  { id: "68", group: "Ganadero", name: "Cama de pavos", C: 41.6, N: 2.6, humidity: 26 }
 ];
 
 const normalizeMaterial = m => ({ ...m, proportion: typeof m.proportion === "number" ? m.proportion : 0 });

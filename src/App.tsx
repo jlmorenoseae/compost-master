@@ -99,6 +99,18 @@ const MATERIAL_GROUPS = ["Agrícola", "Urbano", "Industrial", "Ganadero"];
 // Fuente principal: CREF 2021, The Composting Handbook, Apéndice B "Example feedstock characteristics"
 // (compila OFCH = Rynk et al. 1992, Tabla A.1; WSU; COTC). Rangos OFCH tomados de la calculadora WSU-Puyallup (2012).
 // Materiales mediterráneos: Álvarez de la Puente 2006, Junta de Andalucía (DA en kg/L). Residuos de cocina: MITECO.
+// Densidad aparente de la mezcla inicial: preferido 700-1.000 lb/yd3 (415-593 kg/m3); razonable < 1.200 lb/yd3 (712 kg/m3).
+// Fuentes: UC ANR (Compost Guidebook, adaptado de Compost Research & Education Foundation); BioCycle 2023 (800-1.000 lb/cy);
+// LSU AgCenter 2022 (no superar 1.000 lb/yd3).
+const DENS_PREF = [415, 593];
+const DENS_MAXOK = 712;
+function densStatus(d) {
+  if (d == null) return null;
+  if (d > DENS_MAXOK) return { lvl: 'bad', label: '⚠ DEMASIADO DENSA', tip: 'Poca aireación: añade material estructurante (poda triturada, paja).' };
+  if (d > DENS_PREF[1]) return { lvl: 'ok', label: '≈ ALGO DENSA', tip: 'Aceptable; algo de estructurante mejoraría la aireación.' };
+  if (d < DENS_PREF[0]) return { lvl: 'ok', label: '≈ MUY ESPONJOSA', tip: 'Mucho aire: puede secarse y enfriarse. Vigila la humedad.' };
+  return { lvl: 'ideal', label: '✓ ADECUADA', tip: null };
+}
 const DENS_MIN_COVER = 50; // % mínimo de la mezcla con dato para mostrar la densidad aparente de la mezcla
 const DENS_DATA = {
   // AGRÍCOLA
@@ -237,97 +249,87 @@ function calculateMix(materials) {
   };
 }
 
-// OPTIMIZACIÓN INTELIGENTE
-function optimizeMixSmart(materials) {
-  if (materials.length === 0) return materials;
-  if (materials.length === 1) return materials.map(m => ({ ...m, proportion: 100 }));
+// OPTIMIZACIÓN
+// Criterio: primero acercar la C/N al rango preferido; después, la humedad (que puede corregirse con riego o aireación).
+// Cada ingrediente elegido conserva al menos MIN_SHARE % de la mezcla (criterio didáctico).
+const MIN_SHARE = 10;
 
-  // Algoritmo de optimización iterativo
-  const maxIterations = 1000;
-  const learningRate = 0.5;
-  
-  // Inicializar con proporciones iguales
-  let proportions = materials.map(() => 100 / materials.length);
-  
-  for (let iter = 0; iter < maxIterations; iter++) {
-    // Calcular métricas actuales
-    let totalC = 0, totalN = 0, totalWater = 0, totalFresh = 0;
-    
-    materials.forEach((mat, i) => {
-      const fresh = proportions[i];
-      const dry = fresh * (1 - mat.humidity / 100);
-      totalC += dry * (mat.C / 100);
-      totalN += dry * (mat.N / 100);
-      totalWater += fresh - dry;
-      totalFresh += fresh;
-    });
-    
-    const currentCN = totalN > 0 ? totalC / totalN : 0;
-    const currentHum = totalFresh > 0 ? (totalWater / totalFresh) * 100 : 0;
-    
-    // Calcular error
-    const errorCN = TARGET_CN - currentCN;
-    const errorHum = TARGET_HUM - currentHum;
-    const totalError = Math.abs(errorCN) + Math.abs(errorHum);
-    
-    // Si el error es muy pequeño, hemos terminado
-    if (totalError < 0.5) break;
-    
-    // Ajustar proporciones basándose en las características de cada material
-    const adjustments = materials.map((mat, i) => {
-      const matCN = mat.C / mat.N;
-      const matHum = mat.humidity;
-      
-      let adjustment = 0;
-      
-      // Ajustar según C/N
-      if (errorCN > 0) {
-        // Necesitamos más carbono - aumentar materiales carbonados
-        if (matCN > currentCN) adjustment += learningRate * errorCN / 10;
-        else adjustment -= learningRate * errorCN / 10;
-      } else {
-        // Necesitamos más nitrógeno - aumentar materiales nitrogenados
-        if (matCN < currentCN) adjustment -= learningRate * errorCN / 10;
-        else adjustment += learningRate * errorCN / 10;
+function mixStats(mats, props) {
+  let C = 0, N = 0, W = 0, F = 0;
+  mats.forEach((m, i) => {
+    const fresh = props[i], dry = fresh * (1 - m.humidity / 100);
+    C += dry * m.C / 100; N += dry * m.N / 100; W += fresh - dry; F += fresh;
+  });
+  return { cn: N > 0 ? C / N : 0, hum: F > 0 ? (W / F) * 100 : 0 };
+}
+
+function distTo(v, r) { return v < r[0] ? r[0] - v : v > r[1] ? v - r[1] : 0; }
+
+function mixScore(st) {
+  return distTo(st.cn, IDEAL_CN) * 100 + distTo(st.hum, IDEAL_HUM)
+    + 0.01 * Math.abs(st.cn - TARGET_CN) + 0.001 * Math.abs(st.hum - TARGET_HUM);
+}
+
+// Búsqueda local por transferencias entre pares, con pasos decrecientes y varios puntos de partida
+function searchProportions(mats, minShare) {
+  const n = mats.length;
+  const starts = [mats.map(() => 100 / n)];
+  for (let k = 0; k < n; k++) starts.push(mats.map((_, i) => (i === k ? 100 - minShare * (n - 1) : minShare)));
+  let best = null, bestScore = Infinity;
+  starts.forEach(start => {
+    let p = start.slice(), sc = mixScore(mixStats(mats, p));
+    [10, 5, 2, 1, 0.5, 0.1].forEach(step => {
+      let improved = true, guard = 0;
+      while (improved && guard++ < 2000) {
+        improved = false;
+        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+          if (i === j || p[j] - step < minShare - 1e-9) continue;
+          const q = p.slice(); q[i] += step; q[j] -= step;
+          const s2 = mixScore(mixStats(mats, q));
+          if (s2 < sc - 1e-9) { p = q; sc = s2; improved = true; }
+        }
       }
-      
-      // Ajustar según humedad
-      if (errorHum > 0) {
-        // Necesitamos más humedad
-        if (matHum > currentHum) adjustment += learningRate * errorHum / 50;
-        else adjustment -= learningRate * errorHum / 50;
-      } else {
-        // Necesitamos menos humedad
-        if (matHum < currentHum) adjustment -= learningRate * errorHum / 50;
-        else adjustment += learningRate * errorHum / 50;
-      }
-      
-      return adjustment;
     });
-    
-    // Aplicar ajustes
-    proportions = proportions.map((p, i) => Math.max(0, p + adjustments[i]));
-    
-    // Normalizar a 100%
-    const sum = proportions.reduce((a, b) => a + b, 0);
-    if (sum > 0) {
-      proportions = proportions.map(p => (p / sum) * 100);
-    }
-  }
-  
-  // Redondear y asegurar que suma 100
-  proportions = proportions.map(p => Math.round(p * 10) / 10);
-  const sum = proportions.reduce((a, b) => a + b, 0);
-  if (sum !== 100 && proportions.length > 0) {
-    const diff = 100 - sum;
-    proportions[0] += diff;
-    proportions[0] = Math.round(proportions[0] * 10) / 10;
-  }
-  
-  return materials.map((mat, i) => ({
-    ...mat,
-    proportion: proportions[i]
-  }));
+    if (sc < bestScore) { bestScore = sc; best = p; }
+  });
+  return best;
+}
+
+function roundTo100(props) {
+  const r = props.map(p => Math.round(p * 10) / 10);
+  const diff = Math.round((100 - r.reduce((a, b) => a + b, 0)) * 10) / 10;
+  if (diff !== 0) { const k = r.indexOf(Math.max(...r)); r[k] = Math.round((r[k] + diff) * 10) / 10; }
+  return r;
+}
+
+function suggestFor(need, selected) {
+  const ids = new Set(selected.map(m => m.id));
+  const out = [];
+  MATERIAL_GROUPS.forEach(g => {
+    const cands = BASE_MATERIALS.filter(m => m.group === g && !ids.has(m.id))
+      .filter(m => need === 'N' ? m.C / m.N <= OK_CN[0] : m.C / m.N >= OK_CN[1])
+      .sort((a, b) => need === 'N' ? (a.C / a.N) - (b.C / b.N) : (b.C / b.N) - (a.C / a.N));
+    if (cands.length) out.push(cands[0].name);
+  });
+  return out;
+}
+
+function optimizeMixSmart(materials) {
+  const n = materials.length;
+  const minShare = Math.min(MIN_SHARE, 100 / n);
+  const props = roundTo100(searchProportions(materials, minShare));
+  const st = mixStats(materials, props);
+  const cn = +st.cn.toFixed(1), hum = +st.hum.toFixed(1);
+  const need = st.cn > IDEAL_CN[1] ? 'N' : st.cn < IDEAL_CN[0] ? 'C' : null;
+  const cnLevel = need === null ? 'ideal' : (st.cn >= OK_CN[0] && st.cn <= OK_CN[1] ? 'ok' : 'bad');
+  let humAdvice = null;
+  if (hum < IDEAL_HUM[0]) humAdvice = `La humedad queda en ${hum} %. Riega la mezcla al montarla hasta llegar a ${IDEAL_HUM[0]}-${IDEAL_HUM[1]} % (prueba del puño: al apretar debe soltar como mucho unas gotas).`;
+  if (hum > IDEAL_HUM[1]) humAdvice = `La humedad queda en ${hum} %. Añade material seco estructurante o voltea más a menudo para airear y bajar a ${IDEAL_HUM[0]}-${IDEAL_HUM[1]} %.`;
+  return {
+    materials: materials.map((m, i) => ({ ...m, proportion: props[i] })),
+    apply: cnLevel !== 'bad', cn, hum, need, cnLevel, humAdvice,
+    suggestions: need ? suggestFor(need, materials) : []
+  };
 }
 
 function rangeStatus(v, ideal, ok) {
@@ -367,6 +369,7 @@ export default function App() {
   const M = (desk, mobile) => (mob ? mobile : desk);
   const [selected, setSelected] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [optResult, setOptResult] = useState(null);
   const [savedMixes, setSavedMixes] = useState([]);
   const [optimizing, setOptimizing] = useState(false);
 
@@ -380,6 +383,8 @@ export default function App() {
   const stats = useMemo(() => calculateMix(selected), [selected]);
   const phce = useMemo(() => calculatePhCe(selected), [selected]);
   const densMix = useMemo(() => calculateDensity(selected), [selected]);
+  const densSt = densStatus(densMix.dens);
+  const densWarn = densSt && densSt.lvl !== 'ideal';
   const phWarnings = [];
   if (phce.ph != null) {
     if (phce.ph < PH_OK[0] || phce.ph > PH_OK[1]) phWarnings.push(`pH estimado ${phce.ph}: fuera del rango razonable (${PH_OK[0]}-${PH_OK[1]}). Corrige la mezcla con materiales de pH opuesto.`);
@@ -396,6 +401,7 @@ export default function App() {
   const stLabel = st => st === 'ideal' ? "✓ ÓPTIMO" : st === 'ok' ? "≈ ACEPTABLE" : "⚠ AJUSTAR";
 
   const toggleMaterial = mat => {
+    setOptResult(null);
     setSelected(prev =>
       prev.find(m => m.id === mat.id)
         ? prev.filter(m => m.id !== mat.id)
@@ -404,27 +410,42 @@ export default function App() {
   };
 
   const updateProp = (id, value) => {
+    setOptResult(null);
     setSelected(prev => prev.map(m => (m.id === id ? { ...m, proportion: Math.min(100, Math.max(0, Number(value) || 0)) } : m)));
   };
 
   const optimizeMix = () => {
     if (selected.length < 2) {
-      alert("Selecciona al menos 2 materiales para optimizar");
+      setOptResult({ kind: 'info', lines: ["Selecciona al menos 2 materiales para optimizar la mezcla."] });
       return;
     }
-    
     setOptimizing(true);
-    
-    // Usar setTimeout para permitir que la UI se actualice
     setTimeout(() => {
-      const optimized = optimizeMixSmart(selected);
-      setSelected(optimized);
+      const r = optimizeMixSmart(selected);
+      const lines = [];
+      const sug = r.suggestions.length ? ` Por ejemplo: ${r.suggestions.join(', ')}.` : '';
+      const nutr = r.need === 'N' ? 'nitrógeno' : 'carbono';
+      const rich = r.need === 'N' ? 'Todos los materiales elegidos aportan sobre todo carbono.' : 'Todos los materiales elegidos aportan sobre todo nitrógeno.';
+      let kind = 'ok';
+      if (r.cnLevel === 'bad') {
+        kind = 'bad';
+        lines.push(`Con estos materiales la C/N no puede ${r.need === 'N' ? 'bajar' : 'subir'} de ${r.cn} (rango razonable ${OK_CN[0]}-${OK_CN[1]}). ${rich} No se cambian las proporciones.`);
+        lines.push(`Añade un material rico en ${nutr}.${sug}`);
+      } else {
+        if (r.cnLevel === 'ok') {
+          kind = 'warn';
+          lines.push(`Lo más cerca posible con estos materiales es C/N ${r.cn}: aceptable, pero fuera del rango preferido (${IDEAL_CN[0]}-${IDEAL_CN[1]}).`);
+          lines.push(`Para mejorarla, añade un material rico en ${nutr}.${sug}`);
+        } else {
+          lines.push(`Mezcla optimizada: C/N ${r.cn}, dentro del rango preferido (${IDEAL_CN[0]}-${IDEAL_CN[1]}).`);
+        }
+        if (r.humAdvice) { lines.push(r.humAdvice); if (kind === 'ok') kind = 'warn'; }
+        lines.push(`Cada material elegido mantiene al menos un ${Math.round(Math.min(MIN_SHARE, 100 / selected.length))} % de la mezcla.`);
+        setSelected(r.materials);
+      }
+      setOptResult({ kind, lines });
       setOptimizing(false);
-      
-      // Calcular y mostrar resultados
-      const newStats = calculateMix(optimized);
-      alert(`✨ Optimización completada!\n\nC/N: ${newStats.cn} ${newStats.cn >= IDEAL_CN[0] && newStats.cn <= IDEAL_CN[1] ? '✓' : ''}\nHumedad: ${newStats.hum}% ${newStats.hum >= IDEAL_HUM[0] && newStats.hum <= IDEAL_HUM[1] ? '✓' : ''}`);
-    }, 100);
+    }, 50);
   };
 
   const distributeEqually = () => {
@@ -481,11 +502,16 @@ pH Y SALINIDAD (orientativo):
 • Parte con valores estimados por analogía: ${phce.estPct}%
 ${phWarnings.map(w => '⚠ ' + w).join('\n')}
 
+DENSIDAD APARENTE (orientativo):
+• Estimada: ${densMix.dens != null ? densMix.dens + ' kg/m³ ' + densSt.label : 'datos insuficientes'}
+• Parte de la mezcla con dato: ${densMix.coverPct}%
+
 PARÁMETROS DE REFERENCIA:
 • Relación C/N: 25-30 (razonable 20-40)
 • Humedad: 50-60% (razonable 40-65%)
 • pH: 5,5-9,0 (preferido 6,5-8,0)
 • Salinidad (CE): < 4 dS/m
+• Densidad aparente de la mezcla: 415-593 kg/m³ (razonable < 712)
 • Temperatura (termófila): 55-65°C
 `;
     const blob = new Blob([text], { type: 'text/plain' });
@@ -498,7 +524,7 @@ PARÁMETROS DE REFERENCIA:
   };
 
   const clearAll = () => {
-    if (confirm("¿Limpiar toda la mezcla?")) setSelected([]);
+    if (confirm("¿Limpiar toda la mezcla?")) { setSelected([]); setOptResult(null); }
   };
 
   return (
@@ -550,6 +576,7 @@ PARÁMETROS DE REFERENCIA:
               { label: "Humedad", value: "50-60%", bg: '#dbeafe', detail: "Razonable: 40-65%" },
               { label: "pH", value: "5,5-9,0", bg: '#e9d5ff', detail: "Preferido 6,5-8,0" },
               { label: "Salinidad", value: "< 4 dS/m", bg: '#fed7aa', detail: "Baja salinidad" },
+              { label: "Densidad aparente", value: "415-593 kg/m³", bg: '#f5e6d8', detail: "Mezcla inicial · razonable < 712" },
               { label: "Temperatura", value: "55-65°C", bg: '#fecaca', detail: "Fase termófila" },
             ].map((item, i) => (
               <div key={i} style={{ background: item.bg, padding: M('20px', '12px'), borderRadius: '16px', border: '3px solid rgba(0,0,0,0.08)' }}>
@@ -676,6 +703,12 @@ PARÁMETROS DE REFERENCIA:
                       Limpiar
                     </button>
                   </div>
+
+                  {optResult && (
+                    <div role="status" style={{ background: optResult.kind === 'ok' ? '#ecfdf5' : optResult.kind === 'bad' ? '#fee2e2' : optResult.kind === 'warn' ? '#fef3c7' : '#f3f4f6', border: '3px solid ' + (optResult.kind === 'ok' ? '#10b981' : optResult.kind === 'bad' ? '#ef4444' : optResult.kind === 'warn' ? '#fbbf24' : '#d1d5db'), borderRadius: '12px', padding: M('14px 16px', '12px'), marginBottom: '16px', fontSize: '14px', fontWeight: '600', color: '#374151', lineHeight: 1.5 }}>
+                      {optResult.lines.map((l, i) => <p key={i} style={{ margin: i ? '6px 0 0 0' : 0 }}>{l}</p>)}
+                    </div>
+                  )}
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '400px', overflowY: 'auto' }}>
                     {selected.map(m => (
@@ -827,23 +860,26 @@ PARÁMETROS DE REFERENCIA:
                       </div>
                     </div>
 
-                    <div style={{ background: 'linear-gradient(135deg, #f5e6d8, #e8d2bd)', padding: M('24px', '14px 10px'), gridColumn: mob ? '1 / -1' : 'auto', borderRadius: '20px', border: '3px solid #a9794f', textAlign: 'center' }}>
+                    <div style={{ background: densWarn ? 'linear-gradient(135deg, #fef3c7, #fde68a)' : 'linear-gradient(135deg, #f5e6d8, #e8d2bd)', padding: M('24px', '14px 10px'), gridColumn: mob ? '1 / -1' : 'auto', borderRadius: '20px', border: densWarn ? '3px solid #fbbf24' : '3px solid #a9794f', textAlign: 'center' }}>
                       <div style={{ fontSize: '13px', fontWeight: '800', color: '#374151', marginBottom: '10px' }}>DENSIDAD APARENTE</div>
-                      <div style={{ fontSize: M('46px', '32px'), fontWeight: '900', color: '#7c4a24', lineHeight: 1 }}>
+                      <div style={{ fontSize: M('46px', '32px'), fontWeight: '900', color: densWarn ? '#d97706' : '#7c4a24', lineHeight: 1 }}>
                         {densMix.dens != null ? densMix.dens : 's/d'}
                       </div>
-                      <div style={{ fontSize: '14px', fontWeight: '800', color: '#7c4a24', marginTop: '10px' }}>
-                        {densMix.dens != null ? "ℹ INFORMATIVO" : "ℹ DATOS INSUFICIENTES"}
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: densWarn ? '#d97706' : '#7c4a24', marginTop: '10px' }}>
+                        {densSt ? densSt.label : "ℹ DATOS INSUFICIENTES"}
                       </div>
+                      {densSt && densSt.tip && (
+                        <div style={{ fontSize: '12px', color: '#92400e', fontWeight: '700', marginTop: '6px' }}>{densSt.tip}</div>
+                      )}
                       <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
-                        kg/m³ · Con dato: {densMix.coverPct}% de la mezcla
+                        kg/m³ · Preferido: {DENS_PREF[0]}-{DENS_PREF[1]} · Con dato: {densMix.coverPct}% de la mezcla
                       </div>
                     </div>
                   </div>
 
                   {selected.length > 0 && (
                     <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginTop: '-12px', marginBottom: '28px' }}>
-                      Densidad aparente: dato informativo (kg/m³, material con su humedad). Se calcula sumando volúmenes solo de los materiales con dato (≈ indica estimación por analogía; «s/d», sin dato) y se muestra si cubren al menos el {DENS_MIN_COVER}% de la mezcla. La densidad aparente real depende de la compactación y de la humedad.
+                      Densidad aparente: dato informativo (kg/m³, material con su humedad). Se calcula sumando volúmenes solo de los materiales con dato (≈ indica estimación por analogía; «s/d», sin dato) y se muestra si cubren al menos el {DENS_MIN_COVER}% de la mezcla. La densidad aparente real depende de la compactación y de la humedad, y suele ser algo mayor que la calculada porque las partículas finas ocupan huecos de las gruesas.
                     </div>
                   )}
 

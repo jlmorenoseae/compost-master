@@ -600,7 +600,7 @@ PARÁMETROS DE REFERENCIA:
             </p>
             
             {MATERIAL_GROUPS.map(group => {
-              const groupMats = allMaterials.filter(m => m.group === group);
+              const groupMats = allMaterials.filter(m => m.group === group).sort((a, b) => (b.C / b.N) - (a.C / a.N)); // de más a menos carbono (C/N)
               if (groupMats.length === 0 && group === "Personalizado") return null;
               
               return (

@@ -840,7 +840,7 @@ PARÁMETROS DE REFERENCIA:
                         {phce.ph != null ? phce.ph : 's/d'}
                       </div>
                       <div style={{ fontSize: '14px', fontWeight: '800', color: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? '#be123c' : '#d97706', marginTop: '10px' }}>
-                        {(phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? "✓ ORIENTATIVO" : "⚠ REVISAR"}
+                        {phce.ph == null ? "ℹ SIN DATO" : (phce.ph >= PH_PREF[0] && phce.ph <= PH_PREF[1]) ? "✓ ÓPTIMO" : (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1]) ? "≈ ACEPTABLE" : "⚠ REVISAR"}
                       </div>
                       <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
                         Razonable: {PH_OK[0]}-{PH_OK[1]} · Preferido: {PH_PREF[0]}-{PH_PREF[1]}
@@ -853,7 +853,7 @@ PARÁMETROS DE REFERENCIA:
                         {phce.ce != null ? phce.ce : 's/d'}
                       </div>
                       <div style={{ fontSize: '14px', fontWeight: '800', color: (phce.ce == null || phce.ce <= CE_MAX) ? '#334155' : '#d97706', marginTop: '10px' }}>
-                        {(phce.ce == null || phce.ce <= CE_MAX) ? "✓ ORIENTATIVO" : "⚠ REVISAR"}
+                        {phce.ce == null ? "ℹ SIN DATO" : phce.ce <= CE_MAX ? "✓ ÓPTIMO" : "⚠ REVISAR"}
                       </div>
                       <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
                         dS/m · Máximo: {CE_MAX}

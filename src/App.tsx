@@ -2,10 +2,13 @@ import React, { useState, useMemo, useEffect } from "react";
 import { Trash2, Download, Save, History, X, CheckCircle2, Leaf, Info, AlertCircle, Zap } from "lucide-react";
 
 // CONSTANTES
-const IDEAL_CN = [20, 30];
-const IDEAL_HUM = [50, 60];
-const TARGET_CN = 25; // Objetivo óptimo
-const TARGET_HUM = 55; // Objetivo óptimo
+// Rangos de Rynk et al. (1992) On-Farm Composting Handbook, NRAES-54: razonable / preferido
+const IDEAL_CN = [25, 30]; // preferido
+const OK_CN = [20, 40];    // razonable
+const IDEAL_HUM = [50, 60]; // preferido (%)
+const OK_HUM = [40, 65];    // razonable (%)
+const TARGET_CN = 27.5; // Objetivo: centro del rango preferido
+const TARGET_HUM = 55;  // Objetivo: centro del rango preferido
 // pH: Rynk et al. (1992) On-Farm Composting Handbook, NRAES-54. Razonable 5,5-9,0; preferido 6,5-8,0
 const PH_OK = [5.5, 9.0];
 const PH_PREF = [6.5, 8.0];
@@ -90,8 +93,85 @@ function calculatePhCe(materials) {
   };
 }
 const MATERIAL_GROUPS = ["Agrícola", "Urbano", "Industrial", "Ganadero"];
+// Densidad aparente (kg/m3, material tal cual, con su humedad). Solo valores con referencia publicada;
+// est: true = estimación por analogía con un material parecido (se marca con ≈). El resto queda "s/d".
+// Con rango se usa el punto medio. Conversión: 1 lb/yd3 = 0,5933 kg/m3.
+// Fuente principal: CREF 2021, The Composting Handbook, Apéndice B "Example feedstock characteristics"
+// (compila OFCH = Rynk et al. 1992, Tabla A.1; WSU; COTC). Rangos OFCH tomados de la calculadora WSU-Puyallup (2012).
+// Materiales mediterráneos: Álvarez de la Puente 2006, Junta de Andalucía (DA en kg/L). Residuos de cocina: MITECO.
+const DENS_MIN_COVER = 50; // % mínimo de la mezcla con dato para mostrar la densidad aparente de la mezcla
+const DENS_DATA = {
+  // AGRÍCOLA
+  "1":  { min: 129, max: 135, src: "CREF 2021 (OFCH): paja, media 129; paja de avena 135" },
+  "2":  { min: 340, max: 349, src: "CREF 2021 (COTC): restos verdes triturados, humedad 29-41 %" },
+  "2a": { min: 260, max: 349, est: true, src: "Análogo: recortes de arbusto (OFCH, 260) y restos verdes triturados (COTC, 340-349)" },
+  "2b": { min: 500, max: 500, src: "Junta de Andalucía 2006, poda de olivar triturada (0,5 kg/L)" },
+  "2c": { min: 260, max: 349, est: true, src: "Análogo: recortes de arbusto (OFCH, 260) y restos verdes triturados (COTC, 340-349)" },
+  "2d": { min: 260, max: 349, est: true, src: "Análogo: recortes de arbusto (OFCH, 260) y restos verdes triturados (COTC, 340-349)" },
+  "2e": { min: 260, max: 349, est: true, src: "Análogo: recortes de arbusto (OFCH, 260) y restos verdes triturados (COTC, 340-349)" },
+  "3":  { min: 90,  max: 98,  est: true, src: "Análogo: cañas de maíz y heno (CREF 2021, COTC)" },
+  "4":  { min: 100, max: 119, src: "CREF 2021: hojas sueltas y secas (WSU 100; OFCH 119)" },
+  "5":  { min: 180, max: 180, src: "CREF 2021 (WSU): hojas frescas, humedad 65 %" },
+  "6":  { min: 180, max: 380, src: "CREF 2021: césped suelto (OFCH, 180) y compactado (WSU, 380)" },
+  "7":  { min: 110, max: 130, src: "Rynk et al. 1992, Tabla A.1: cascarilla de arroz 185-219 lb/yd3" },
+  "8":  { min: 20,  max: 20,  src: "CREF 2021 (OFCH): cañas de maíz" },
+  "9":  { min: 250, max: 250, est: true, src: "Análogo: restos de ensilado (CREF 2021, WSU)" },
+  // URBANO
+  "20": { min: 600, max: 941, src: "MITECO, biorresiduos (0,6-0,8 t/m3); CREF 2021: restos de cocina y jardín (WSU, 700), basura orgánica (OFCH, 941)" },
+  "21": { min: 941, max: 950, src: "CREF 2021: hortalizas (OFCH, 941), restos de fruta y verdura (WSU, 950)" },
+  "22": { min: 900, max: 900, src: "CREF 2021 (WSU): posos de café, humedad 80 %" },
+  "25": { min: 130, max: 160, src: "CREF 2021: papel y cartón (WSU, 130), cartón (WSU, 160)" },
+  // INDUSTRIAL
+  "40": { min: 500, max: 500, src: "Junta de Andalucía 2006, orujo de uva (0,5 kg/L)" },
+  "41": { min: 890, max: 890, est: true, src: "Análogo: alperujo (Junta de Andalucía 2006, 0,89 kg/L)" },
+  "42": { min: 900, max: 900, src: "Engineering ToolBox, bagazo de cervecería húmedo" },
+  "43": { min: 890, max: 890, src: "Junta de Andalucía 2006, alperujo (0,89 kg/L)" },
+  "44": { min: 941, max: 950, src: "CREF 2021: hortalizas (OFCH, 941), restos de fruta y verdura (WSU, 950)" },
+  "45": { min: 941, max: 950, est: true, src: "Análogo: hortalizas y restos de fruta (CREF 2021)" },
+  "46": { min: 950, max: 950, est: true, src: "Análogo: restos de fruta (CREF 2021, WSU)" },
+  "47": { min: 941, max: 1300, src: "CREF 2021: hortalizas (OFCH, 941), restos de ensalada (COTC, 1.300)" },
+  "48": { min: 925, max: 925, src: "CREF 2021 (OFCH): orujo de manzana" },
+  "49": { min: 316, max: 316, est: true, src: "Análogo: madera de frondosas, media (CREF 2021, OFCH)" },
+  // GANADERO
+  "60": { min: 785, max: 993, src: "Rynk et al. 1992 (OFCH): estiércol vacuno 1.323-1.674 lb/yd3, media 865 kg/m3" },
+  "61": { min: 1040, max: 1040, src: "CREF 2021 (OFCH): estiércol ovino, humedad 69 %" },
+  "62": { min: 1040, max: 1040, est: true, src: "Análogo: estiércol ovino (CREF 2021, OFCH)" },
+  "63": { min: 960, max: 960, src: "CREF 2021 (OFCH): estiércol porcino, humedad 80 %" },
+  "64": { min: 817, max: 961, src: "Rynk et al. 1992 (OFCH): gallinas ponedoras 1.377-1.620 lb/yd3, media 877 kg/m3" },
+  "66": { min: 721, max: 961, src: "Rynk et al. 1992 (OFCH): estiércol equino 1.215-1.620 lb/yd3, media 818 kg/m3" },
+  "67": { min: 449, max: 609, src: "Rynk et al. 1992 (OFCH): cama de pollos 756-1.026 lb/yd3, media 513 kg/m3" },
+  "68": { min: 465, max: 465, src: "CREF 2021 (OFCH): cama de pavos" }
+  // Sin dato: algas marinas (10) y cáscaras de huevo (24)
+};
+
+function densLabel(id) {
+  const d = DENS_DATA[id];
+  if (!d) return 'Dens. aparente: s/d';
+  const m = d.est ? '≈' : '';
+  return d.min === d.max ? `Dens. aparente: ${m}${d.min} kg/m³` : `Dens. aparente: ${m}${d.min}-${d.max} kg/m³`;
+}
+
+function calculateDensity(materials) {
+  let total = 0, covered = 0, vol = 0;
+  materials.forEach(m => {
+    const p = m.proportion || 0;
+    if (p <= 0) return;
+    total += p;
+    const d = DENS_DATA[m.id];
+    if (d) { covered += p; vol += p / ((d.min + d.max) / 2); }
+  });
+  const coverPct = total > 0 ? Math.round((covered / total) * 100) : 0;
+  return {
+    dens: vol > 0 && coverPct >= DENS_MIN_COVER ? Math.round(covered / vol) : null,
+    coverPct
+  };
+}
 
 const BASE_MATERIALS = [
+  // Revisión oct-2026 (%C en base seca, C = %N x C/N): hierba fresca C/N 18 (Clemson CAMM 2020: 45 %C, 2,5 %N);
+  // residuos de cocina C/N 15 (restos de comida, Radovich/UH-CTAHR); posos de café C/N 20 (UC Composting 101);
+  // gallinaza C/N 10 (UC Composting 101); papel y cartón 40 %C / 0,1 %N, C/N 400 (UC ANR, 4-H);
+  // estiércol equino C/N 30 con cama (Rynk 1992 vía MSU Ext.; carbono medido 18,7-47,5 %, Rutgers).
   // AGRÍCOLA
   { id: "1", group: "Agrícola", name: "Paja de cereal", C: 55, N: 0.7, humidity: 15 },
   { id: "2", group: "Agrícola", name: "Poda mixta triturada", C: 50, N: 1.0, humidity: 30 },
@@ -103,18 +183,18 @@ const BASE_MATERIALS = [
   { id: "3", group: "Agrícola", name: "Restos de cosecha", C: 60, N: 0.8, humidity: 20 },
   { id: "4", group: "Agrícola", name: "Hojas secas", C: 60, N: 1.0, humidity: 15 },
   { id: "5", group: "Agrícola", name: "Hojas verdes", C: 25, N: 1.8, humidity: 70 },
-  { id: "6", group: "Agrícola", name: "Hierba fresca", C: 20, N: 2.5, humidity: 80 },
+  { id: "6", group: "Agrícola", name: "Hierba fresca", C: 45, N: 2.5, humidity: 80 },
   // Fuente materiales 7-10, 48-49, 67-68: On-Farm Composting Handbook (Rynk et al., 1992), Tabla A.1. C = %N x C/N
   { id: "7", group: "Agrícola", name: "Cascarilla de arroz", C: 36.3, N: 0.3, humidity: 14 },
   { id: "8", group: "Agrícola", name: "Cañas de maíz", C: 46.6, N: 0.7, humidity: 12 },
   { id: "9", group: "Agrícola", name: "Ensilado de maíz", C: 52.7, N: 1.3, humidity: 66 },
   { id: "10", group: "Agrícola", name: "Algas marinas", C: 32.3, N: 1.9, humidity: 53 },
   // URBANO
-  { id: "20", group: "Urbano", name: "Residuos de cocina", C: 18, N: 2.5, humidity: 85 },
+  { id: "20", group: "Urbano", name: "Residuos de cocina", C: 37.5, N: 2.5, humidity: 85 },
   { id: "21", group: "Urbano", name: "Restos de frutas y verduras", C: 20, N: 2.2, humidity: 90 },
-  { id: "22", group: "Urbano", name: "Posos de café", C: 20, N: 2.0, humidity: 80 },
+  { id: "22", group: "Urbano", name: "Posos de café", C: 40, N: 2.0, humidity: 80 },
   { id: "24", group: "Urbano", name: "Cáscaras de huevo", C: 15, N: 1.2, humidity: 5 },
-  { id: "25", group: "Urbano", name: "Papel y cartón", C: 170, N: 0.1, humidity: 10 },
+  { id: "25", group: "Urbano", name: "Papel y cartón", C: 40, N: 0.1, humidity: 10 },
   // INDUSTRIAL
   { id: "40", group: "Industrial", name: "Orujo de uva", C: 30, N: 1.8, humidity: 60 },
   { id: "41", group: "Industrial", name: "Pulpa de aceituna", C: 45, N: 1.2, humidity: 65 },
@@ -131,8 +211,8 @@ const BASE_MATERIALS = [
   { id: "61", group: "Ganadero", name: "Estiércol ovino", C: 30, N: 2.5, humidity: 65 },
   { id: "62", group: "Ganadero", name: "Estiércol caprino", C: 28, N: 2.6, humidity: 60 },
   { id: "63", group: "Ganadero", name: "Estiércol porcino", C: 14, N: 3.5, humidity: 85 },
-  { id: "64", group: "Ganadero", name: "Gallinaza", C: 10, N: 4.0, humidity: 70 },
-  { id: "66", group: "Ganadero", name: "Estiércol equino", C: 55, N: 1.4, humidity: 60 },
+  { id: "64", group: "Ganadero", name: "Gallinaza", C: 40, N: 4.0, humidity: 70 },
+  { id: "66", group: "Ganadero", name: "Estiércol equino", C: 42, N: 1.4, humidity: 60 },
   { id: "67", group: "Ganadero", name: "Cama de pollos de engorde", C: 37.1, N: 2.75, humidity: 34 },
   { id: "68", group: "Ganadero", name: "Cama de pavos", C: 41.6, N: 2.6, humidity: 26 }
 ];
@@ -250,15 +330,41 @@ function optimizeMixSmart(materials) {
   }));
 }
 
+function rangeStatus(v, ideal, ok) {
+  if (v >= ideal[0] && v <= ideal[1]) return 'ideal';
+  if (v >= ok[0] && v <= ok[1]) return 'ok';
+  return 'bad';
+}
+
 function buildRecommendation(cn, hum) {
-  if (cn < IDEAL_CN[0]) return "⚠️ Demasiado nitrógeno. Añade material seco (paja, poda).";
-  if (cn > IDEAL_CN[1]) return "⚠️ Demasiado carbono. Añade material fresco (restos de cocina, estiércol).";
-  if (hum < IDEAL_HUM[0]) return "⚠️ Mezcla seca. Añade materiales húmedos o agua.";
-  if (hum > IDEAL_HUM[1]) return "⚠️ Muy húmeda. Añade material seco estructurante.";
+  if (cn < OK_CN[0]) return "⚠️ Demasiado nitrógeno. Añade material seco (paja, poda).";
+  if (cn > OK_CN[1]) return "⚠️ Demasiado carbono. Añade material fresco (restos de cocina, estiércol).";
+  if (hum < OK_HUM[0]) return "⚠️ Mezcla seca. Añade materiales húmedos o agua.";
+  if (hum > OK_HUM[1]) return "⚠️ Muy húmeda. Añade material seco estructurante.";
+  if (cn < IDEAL_CN[0]) return `💡 C/N aceptable pero algo baja. Añade un poco de material seco para acercarte a ${IDEAL_CN[0]}-${IDEAL_CN[1]}.`;
+  if (cn > IDEAL_CN[1]) return `💡 C/N aceptable pero algo alta. Añade un poco de material fresco para acercarte a ${IDEAL_CN[0]}-${IDEAL_CN[1]}.`;
+  if (hum < IDEAL_HUM[0]) return `💡 Humedad aceptable pero algo baja. Riega o añade material húmedo para llegar a ${IDEAL_HUM[0]}-${IDEAL_HUM[1]}%.`;
+  if (hum > IDEAL_HUM[1]) return `💡 Humedad aceptable pero algo alta. Añade algo de material seco para bajar a ${IDEAL_HUM[0]}-${IDEAL_HUM[1]}%.`;
   return "✅ ¡Perfecto! Mezcla óptima para compostaje.";
 }
 
+function useMediaQuery(query) {
+  const get = () => typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : false;
+  const [matches, setMatches] = useState(get);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    if (mql.addEventListener) mql.addEventListener('change', onChange); else mql.addListener(onChange);
+    return () => { if (mql.removeEventListener) mql.removeEventListener('change', onChange); else mql.removeListener(onChange); };
+  }, [query]);
+  return matches;
+}
+
 export default function App() {
+  const mob = useMediaQuery('(max-width: 768px)'); // móvil
+  const wide = useMediaQuery('(min-width: 1025px)'); // escritorio: dos columnas
+  const M = (desk, mobile) => (mob ? mobile : desk);
   const [selected, setSelected] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [savedMixes, setSavedMixes] = useState([]);
@@ -273,6 +379,7 @@ export default function App() {
   const allMaterials = BASE_MATERIALS;
   const stats = useMemo(() => calculateMix(selected), [selected]);
   const phce = useMemo(() => calculatePhCe(selected), [selected]);
+  const densMix = useMemo(() => calculateDensity(selected), [selected]);
   const phWarnings = [];
   if (phce.ph != null) {
     if (phce.ph < PH_OK[0] || phce.ph > PH_OK[1]) phWarnings.push(`pH estimado ${phce.ph}: fuera del rango razonable (${PH_OK[0]}-${PH_OK[1]}). Corrige la mezcla con materiales de pH opuesto.`);
@@ -282,8 +389,11 @@ export default function App() {
   if (phce.ce != null && phce.ce > CE_MAX) phWarnings.push(`CE estimada ${phce.ce} dS/m: por encima de ${CE_MAX} dS/m. Riesgo de salinidad en el compost; reduce la proporción de materiales salinos.`);
   const totalProportion = useMemo(() => selected.reduce((sum, m) => sum + m.proportion, 0), [selected]);
 
-  const cnOk = stats.cn >= IDEAL_CN[0] && stats.cn <= IDEAL_CN[1];
-  const humOk = stats.hum >= IDEAL_HUM[0] && stats.hum <= IDEAL_HUM[1];
+  const cnSt = rangeStatus(stats.cn, IDEAL_CN, OK_CN);
+  const humSt = rangeStatus(stats.hum, IDEAL_HUM, OK_HUM);
+  const cnOk = cnSt === 'ideal';
+  const humOk = humSt === 'ideal';
+  const stLabel = st => st === 'ideal' ? "✓ ÓPTIMO" : st === 'ok' ? "≈ ACEPTABLE" : "⚠ AJUSTAR";
 
   const toggleMaterial = mat => {
     setSelected(prev =>
@@ -356,11 +466,11 @@ MATERIALES:
 ${selected.map((m, i) => `${i + 1}. ${m.name}: ${m.proportion}% (${(m.proportion / 10).toFixed(1)} partes)`).join('\n')}
 
 RESULTADOS:
-• C/N: ${stats.cn} ${cnOk ? '✓ ÓPTIMO' : '⚠ AJUSTAR'}
-  Rango ideal: ${IDEAL_CN[0]}-${IDEAL_CN[1]}
+• C/N: ${stats.cn} ${stLabel(cnSt)}
+  Preferido: ${IDEAL_CN[0]}-${IDEAL_CN[1]} · Razonable: ${OK_CN[0]}-${OK_CN[1]}
   
-• Humedad: ${stats.hum}% ${humOk ? '✓ ÓPTIMO' : '⚠ AJUSTAR'}
-  Rango ideal: ${IDEAL_HUM[0]}-${IDEAL_HUM[1]}%
+• Humedad: ${stats.hum}% ${stLabel(humSt)}
+  Preferido: ${IDEAL_HUM[0]}-${IDEAL_HUM[1]}% · Razonable: ${OK_HUM[0]}-${OK_HUM[1]}%
 
 ${buildRecommendation(stats.cn, stats.hum)}
 
@@ -372,8 +482,8 @@ pH Y SALINIDAD (orientativo):
 ${phWarnings.map(w => '⚠ ' + w).join('\n')}
 
 PARÁMETROS DE REFERENCIA:
-• Relación C/N: 20-30
-• Humedad: 50-60%
+• Relación C/N: 25-30 (razonable 20-40)
+• Humedad: 50-60% (razonable 40-65%)
 • pH: 5,5-9,0 (preferido 6,5-8,0)
 • Salinidad (CE): < 4 dS/m
 • Temperatura (termófila): 55-65°C
@@ -392,24 +502,24 @@ PARÁMETROS DE REFERENCIA:
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', padding: '20px' }}>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', padding: M('20px', '10px'), overflowX: 'hidden' }}>
       <div style={{ maxWidth: '100%', margin: '0 auto', width: '100%' }}>
         
         {/* HEADER */}
-        <div style={{ background: 'white', borderRadius: '24px', padding: '40px', marginBottom: '32px', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
+        <div style={{ background: 'white', borderRadius: M('24px', '18px'), padding: M('40px', '18px'), marginBottom: M('32px', '14px'), boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-              <div style={{ width: '80px', height: '80px', background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}>
-                <Leaf size={44} color="white" strokeWidth={3} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: M('20px', '12px') }}>
+              <div style={{ width: M('80px', '52px'), height: M('80px', '52px'), flexShrink: 0, background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }}>
+                <Leaf size={mob ? 30 : 44} color="white" strokeWidth={3} />
               </div>
               <div>
-                <h1 style={{ fontSize: '52px', fontWeight: '900', color: '#111827', margin: 0, lineHeight: 1 }}>
+                <h1 style={{ fontSize: M('52px', '30px'), fontWeight: '900', color: '#111827', margin: 0, lineHeight: 1 }}>
                   Compost<span style={{ color: '#10b981' }}>Master</span>
                 </h1>
-                <p style={{ fontSize: '20px', color: '#6b7280', fontWeight: '600', margin: '8px 0 0 0' }}>
+                <p style={{ fontSize: M('20px', '15px'), color: '#6b7280', fontWeight: '600', margin: '8px 0 0 0' }}>
                   Calculadora de Compostaje
                 </p>
-                <p style={{ fontSize: '15px', color: '#6b7280', fontWeight: '600', margin: '6px 0 0 0' }}>
+                <p style={{ fontSize: M('15px', '13px'), color: '#6b7280', fontWeight: '600', margin: '6px 0 0 0' }}>
                   Una aplicación de{' '}
                   <a href="https://www.agroecologia.net/" target="_blank" rel="noopener noreferrer" style={{ color: '#059669', fontWeight: '800', textDecoration: 'none' }}>
                     Sociedad Española de Agricultura Ecológica y Agroecología (SEAE)
@@ -419,7 +529,7 @@ PARÁMETROS DE REFERENCIA:
             </div>
             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
               {savedMixes.length > 0 && (
-                <button onClick={() => setShowHistory(true)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '18px 24px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', borderRadius: '14px', fontSize: '17px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}>
+                <button onClick={() => setShowHistory(true)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: M('18px 24px', '12px 16px'), background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', borderRadius: '14px', fontSize: M('17px', '15px'), fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)' }}>
                   <History size={24} /> Mis Mezclas ({savedMixes.length})
                 </button>
               )}
@@ -428,36 +538,39 @@ PARÁMETROS DE REFERENCIA:
         </div>
 
         {/* FACTORES IDEALES */}
-        <details style={{ background: 'white', borderRadius: '20px', padding: '32px', marginBottom: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-          <summary style={{ fontSize: '24px', fontWeight: '800', cursor: 'pointer', color: '#111827', listStyle: 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '32px' }}>📊</span>
+        <details style={{ background: 'white', borderRadius: '20px', padding: M('32px', '18px'), marginBottom: M('32px', '14px'), boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+          <summary style={{ fontSize: M('24px', '18px'), fontWeight: '800', cursor: 'pointer', color: '#111827', listStyle: 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: M('32px', '24px') }}>📊</span>
             Factores Ideales para el Compostaje
-            <span style={{ marginLeft: 'auto', color: '#10b981' }}>▼</span>
+            <span className="chev-down" style={{ marginLeft: 'auto', color: '#10b981' }}>▼</span>
           </summary>
-          <div style={{ marginTop: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+          <div style={{ marginTop: '24px', display: 'grid', gridTemplateColumns: M('repeat(auto-fit, minmax(250px, 1fr))', 'repeat(auto-fit, minmax(140px, 1fr))'), gap: M('20px', '10px') }}>
             {[
-              { label: "Relación C/N", value: "20-30", bg: '#d1fae5', detail: "Objetivo: 25" },
-              { label: "Humedad", value: "50-60%", bg: '#dbeafe', detail: "Objetivo: 55%" },
+              { label: "Relación C/N", value: "25-30", bg: '#d1fae5', detail: "Razonable: 20-40" },
+              { label: "Humedad", value: "50-60%", bg: '#dbeafe', detail: "Razonable: 40-65%" },
               { label: "pH", value: "5,5-9,0", bg: '#e9d5ff', detail: "Preferido 6,5-8,0" },
               { label: "Salinidad", value: "< 4 dS/m", bg: '#fed7aa', detail: "Baja salinidad" },
               { label: "Temperatura", value: "55-65°C", bg: '#fecaca', detail: "Fase termófila" },
             ].map((item, i) => (
-              <div key={i} style={{ background: item.bg, padding: '20px', borderRadius: '16px', border: '3px solid rgba(0,0,0,0.08)' }}>
+              <div key={i} style={{ background: item.bg, padding: M('20px', '12px'), borderRadius: '16px', border: '3px solid rgba(0,0,0,0.08)' }}>
                 <div style={{ fontSize: '14px', fontWeight: '700', color: '#374151', marginBottom: '6px' }}>{item.label}</div>
-                <div style={{ fontSize: '28px', fontWeight: '900', color: '#111827', marginBottom: '6px' }}>{item.value}</div>
+                <div style={{ fontSize: M('28px', '21px'), fontWeight: '900', color: '#111827', marginBottom: '6px' }}>{item.value}</div>
                 <div style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280' }}>{item.detail}</div>
               </div>
             ))}
           </div>
         </details>
 
-        <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth > 1024 ? '1fr 1fr' : '1fr', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: wide ? '1fr 1fr' : '1fr', gap: M('24px', '14px') }}>
           
           {/* SELECCIÓN DE MATERIALES */}
-          <div style={{ background: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-            <h2 style={{ fontSize: '32px', fontWeight: '900', color: '#111827', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '36px' }}>1️⃣</span> Selecciona Materiales
+          <div style={{ background: 'white', borderRadius: '20px', padding: M('32px', '16px'), boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+            <h2 style={{ fontSize: M('32px', '22px'), fontWeight: '900', color: '#111827', marginBottom: M('24px', '16px'), display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: M('36px', '24px') }}>1️⃣</span> Selecciona Materiales
             </h2>
+            <p style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600', margin: '-12px 0 20px 0' }}>
+              Los valores de cada material son típicos, tomados de bibliografía: tu material puede variar según su origen, humedad y manejo. ≈ = estimación por analogía; s/d = sin dato.
+            </p>
             
             {MATERIAL_GROUPS.map(group => {
               const groupMats = allMaterials.filter(m => m.group === group);
@@ -466,13 +579,13 @@ PARÁMETROS DE REFERENCIA:
               return (
                 <details key={group} style={{ background: '#f9fafb', border: '3px solid #e5e7eb', borderRadius: '16px', marginBottom: '12px', overflow: 'hidden' }}>
                   <summary style={{ padding: '16px 20px', fontSize: '16px', fontWeight: '800', cursor: 'pointer', background: 'linear-gradient(90deg, #f9fafb, #f3f4f6)', color: '#111827', display: 'flex', alignItems: 'center', gap: '12px', listStyle: 'none' }}>
-                    <span>▶</span>
+                    <span className="chev">▶</span>
                     <span style={{ flex: 1 }}>{group}</span>
-                    <span style={{ background: '#10b981', color: 'white', padding: '4px 12px', borderRadius: '999px', fontSize: '13px', fontWeight: '700' }}>
+                    <span style={{ background: '#10b981', color: 'white', padding: '4px 12px', borderRadius: '999px', fontSize: '13px', fontWeight: '700', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {groupMats.length}
                     </span>
                   </summary>
-                  <div style={{ padding: '20px', background: 'white' }}>
+                  <div style={{ padding: M('20px', '10px'), background: 'white' }}>
                     <div style={{ display: 'grid', gap: '12px' }}>
                       {groupMats.map(mat => {
                         const isSelected = selected.find(m => m.id === mat.id);
@@ -482,7 +595,7 @@ PARÁMETROS DE REFERENCIA:
                             key={mat.id}
                             onClick={() => toggleMaterial(mat)}
                             style={{
-                              padding: '16px',
+                              padding: M('16px', '12px'),
                               border: isSelected ? '3px solid #10b981' : '3px solid #e5e7eb',
                               borderRadius: '12px',
                               background: isSelected ? '#ecfdf5' : 'white',
@@ -499,7 +612,7 @@ PARÁMETROS DE REFERENCIA:
                                   {mat.name}
                                 </div>
                                 <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600' }}>
-                                  C/N: {cn} · Humedad: {mat.humidity}% · {phCeLabel(mat.id)}
+                                  C/N: {cn} · Humedad: {mat.humidity}% · {phCeLabel(mat.id)} · {densLabel(mat.id)}
                                 </div>
                               </div>
                             </div>
@@ -518,9 +631,9 @@ PARÁMETROS DE REFERENCIA:
             {selected.length > 0 ? (
               <>
                 {/* AJUSTAR PROPORCIONES */}
-                <div style={{ background: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', marginBottom: '32px' }}>
-                  <h2 style={{ fontSize: '32px', fontWeight: '900', color: '#111827', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '36px' }}>2️⃣</span> Ajustar Proporciones
+                <div style={{ background: 'white', borderRadius: '20px', padding: M('32px', '16px'), boxShadow: '0 4px 12px rgba(0,0,0,0.08)', marginBottom: M('32px', '14px') }}>
+                  <h2 style={{ fontSize: M('32px', '22px'), fontWeight: '900', color: '#111827', marginBottom: M('24px', '16px'), display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: M('36px', '24px') }}>2️⃣</span> Ajustar Proporciones
                   </h2>
 
                   {Math.abs(totalProportion - 100) > 0.1 && (
@@ -559,7 +672,7 @@ PARÁMETROS DE REFERENCIA:
                       <Zap size={20} /> {optimizing ? 'Optimizando...' : '⚡ Optimizar Mezcla'}
                     </button>
                     
-                    <button onClick={clearAll} style={{ padding: '16px 20px', background: 'white', color: '#ef4444', border: '3px solid #ef4444', borderRadius: '12px', fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
+                    <button onClick={clearAll} style={{ padding: M('16px 20px', '14px 14px'), background: 'white', color: '#ef4444', border: '3px solid #ef4444', borderRadius: '12px', fontSize: '16px', fontWeight: '700', cursor: 'pointer' }}>
                       Limpiar
                     </button>
                   </div>
@@ -587,10 +700,10 @@ PARÁMETROS DE REFERENCIA:
                 </div>
 
                 {/* RESULTADOS */}
-                <div style={{ background: 'white', borderRadius: '20px', padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
-                    <h2 style={{ fontSize: '32px', fontWeight: '900', color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontSize: '36px' }}>3️⃣</span> Resultados
+                <div style={{ background: 'white', borderRadius: '20px', padding: M('32px', '16px'), boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: M('28px', '16px') }}>
+                    <h2 style={{ fontSize: M('32px', '22px'), fontWeight: '900', color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: M('36px', '24px') }}>3️⃣</span> Resultados
                     </h2>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button onClick={saveMix} style={{ padding: '10px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)' }}>
@@ -603,7 +716,7 @@ PARÁMETROS DE REFERENCIA:
                   </div>
 
                   {/* GRÁFICO DE BARRAS */}
-                  <div style={{ background: 'linear-gradient(135deg, #f9fafb, #f3f4f6)', padding: '24px', borderRadius: '16px', marginBottom: '24px', border: '3px solid #e5e7eb' }}>
+                  <div style={{ background: 'linear-gradient(135deg, #f9fafb, #f3f4f6)', padding: M('24px', '14px'), borderRadius: '16px', marginBottom: M('24px', '16px'), border: '3px solid #e5e7eb' }}>
                     <div style={{ fontWeight: '800', fontSize: '14px', color: '#374151', marginBottom: '16px' }}>Distribución de materiales</div>
                     {selected.map(m => {
                       const percentage = totalProportion > 0 ? (m.proportion / totalProportion) * 100 : 0;
@@ -627,10 +740,12 @@ PARÁMETROS DE REFERENCIA:
                               padding: '0 12px',
                               transition: 'width 0.5s ease-out'
                             }}>
-                              <span style={{ color: 'white', fontWeight: '800', fontSize: '13px' }}>
+                              {percentage >= (mob ? 30 : 0) && (
+                              <span style={{ color: 'white', fontWeight: '800', fontSize: '13px', whiteSpace: 'nowrap' }}>
                                 {(m.proportion / 10).toFixed(1)} partes
                               </span>
-                              {percentage > 30 && (
+                              )}
+                              {percentage > (mob ? 60 : 30) && (
                                 <span style={{ color: 'white', fontWeight: '700', fontSize: '12px', opacity: 0.9 }}>
                                   C/N: {cn}
                                 </span>
@@ -643,75 +758,98 @@ PARÁMETROS DE REFERENCIA:
                   </div>
 
                   {/* MÉTRICAS */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '28px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: M('20px', '10px'), marginBottom: M('28px', '14px') }}>
                     <div style={{ 
                       background: cnOk ? 'linear-gradient(135deg, #d1fae5, #a7f3d0)' : 'linear-gradient(135deg, #fef3c7, #fde68a)',
-                      padding: '32px',
+                      padding: M('32px', '16px 10px'),
                       borderRadius: '20px',
                       border: cnOk ? '3px solid #10b981' : '3px solid #fbbf24',
                       textAlign: 'center'
                     }}>
                       <div style={{ fontSize: '14px', fontWeight: '800', color: '#374151', marginBottom: '12px' }}>RELACIÓN C/N</div>
-                      <div style={{ fontSize: '64px', fontWeight: '900', color: cnOk ? '#059669' : '#d97706', lineHeight: 1 }}>
+                      <div style={{ fontSize: M('64px', '40px'), fontWeight: '900', color: cnOk ? '#059669' : '#d97706', lineHeight: 1 }}>
                         {stats.cn}
                       </div>
-                      <div style={{ fontSize: '16px', fontWeight: '800', color: cnOk ? '#059669' : '#d97706', marginTop: '12px' }}>
-                        {cnOk ? "✓ ÓPTIMO" : "⚠ AJUSTAR"}
+                      <div style={{ fontSize: M('16px', '13px'), fontWeight: '800', color: cnOk ? '#059669' : '#d97706', marginTop: '12px' }}>
+                        {stLabel(cnSt)}
                       </div>
-                      <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
-                        Ideal: {IDEAL_CN[0]}-{IDEAL_CN[1]} · Objetivo: {TARGET_CN}
+                      <div style={{ fontSize: M('13px', '11px'), color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
+                        Preferido: {IDEAL_CN[0]}-{IDEAL_CN[1]} · Razonable: {OK_CN[0]}-{OK_CN[1]}
                       </div>
                     </div>
 
                     <div style={{ 
                       background: humOk ? 'linear-gradient(135deg, #dbeafe, #bfdbfe)' : 'linear-gradient(135deg, #fef3c7, #fde68a)',
-                      padding: '32px',
+                      padding: M('32px', '16px 10px'),
                       borderRadius: '20px',
                       border: humOk ? '3px solid #3b82f6' : '3px solid #fbbf24',
                       textAlign: 'center'
                     }}>
                       <div style={{ fontSize: '14px', fontWeight: '800', color: '#374151', marginBottom: '12px' }}>HUMEDAD</div>
-                      <div style={{ fontSize: '64px', fontWeight: '900', color: humOk ? '#1d4ed8' : '#d97706', lineHeight: 1 }}>
+                      <div style={{ fontSize: M('64px', '40px'), fontWeight: '900', color: humOk ? '#1d4ed8' : '#d97706', lineHeight: 1 }}>
                         {stats.hum}%
                       </div>
-                      <div style={{ fontSize: '16px', fontWeight: '800', color: humOk ? '#1d4ed8' : '#d97706', marginTop: '12px' }}>
-                        {humOk ? "✓ ÓPTIMO" : "⚠ AJUSTAR"}
+                      <div style={{ fontSize: M('16px', '13px'), fontWeight: '800', color: humOk ? '#1d4ed8' : '#d97706', marginTop: '12px' }}>
+                        {stLabel(humSt)}
                       </div>
-                      <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
-                        Ideal: {IDEAL_HUM[0]}-{IDEAL_HUM[1]}% · Objetivo: {TARGET_HUM}%
+                      <div style={{ fontSize: M('13px', '11px'), color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
+                        Preferido: {IDEAL_HUM[0]}-{IDEAL_HUM[1]}% · Razonable: {OK_HUM[0]}-{OK_HUM[1]}%
                       </div>
                     </div>
 
-                    <div style={{ background: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? 'linear-gradient(135deg, #f3e8ff, #e9d5ff)' : 'linear-gradient(135deg, #fef3c7, #fde68a)', padding: '32px', borderRadius: '20px', border: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? '3px solid #a855f7' : '3px solid #fbbf24', textAlign: 'center' }}>
-                      <div style={{ fontSize: '14px', fontWeight: '800', color: '#374151', marginBottom: '12px' }}>pH</div>
-                      <div style={{ fontSize: '64px', fontWeight: '900', color: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? '#7e22ce' : '#d97706', lineHeight: 1 }}>
+                  </div>
+
+                  {/* DATOS INFORMATIVOS: pH, salinidad y densidad */}
+                  <div style={{ display: 'grid', gridTemplateColumns: M('repeat(auto-fit, minmax(190px, 1fr))', 'repeat(auto-fit, minmax(140px, 1fr))'), gap: M('16px', '10px'), marginBottom: M('28px', '14px') }}>
+                    <div style={{ background: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? 'linear-gradient(135deg, #ffe4e6, #fecdd3)' : 'linear-gradient(135deg, #fef3c7, #fde68a)', padding: M('24px', '14px 10px'), borderRadius: '20px', border: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? '3px solid #f43f5e' : '3px solid #fbbf24', textAlign: 'center' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '800', color: '#374151', marginBottom: '10px' }}>pH</div>
+                      <div style={{ fontSize: M('46px', '32px'), fontWeight: '900', color: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? '#be123c' : '#d97706', lineHeight: 1 }}>
                         {phce.ph != null ? phce.ph : 's/d'}
                       </div>
-                      <div style={{ fontSize: '16px', fontWeight: '800', color: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? '#7e22ce' : '#d97706', marginTop: '12px' }}>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: (phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? '#be123c' : '#d97706', marginTop: '10px' }}>
                         {(phce.ph == null || (phce.ph >= PH_OK[0] && phce.ph <= PH_OK[1])) ? "✓ ORIENTATIVO" : "⚠ REVISAR"}
                       </div>
-                      <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
+                      <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
                         Razonable: {PH_OK[0]}-{PH_OK[1]} · Preferido: {PH_PREF[0]}-{PH_PREF[1]}
                       </div>
                     </div>
 
-                    <div style={{ background: (phce.ce == null || phce.ce <= CE_MAX) ? 'linear-gradient(135deg, #f3e8ff, #e9d5ff)' : 'linear-gradient(135deg, #fef3c7, #fde68a)', padding: '32px', borderRadius: '20px', border: (phce.ce == null || phce.ce <= CE_MAX) ? '3px solid #a855f7' : '3px solid #fbbf24', textAlign: 'center' }}>
-                      <div style={{ fontSize: '14px', fontWeight: '800', color: '#374151', marginBottom: '12px' }}>SALINIDAD (CE)</div>
-                      <div style={{ fontSize: '64px', fontWeight: '900', color: (phce.ce == null || phce.ce <= CE_MAX) ? '#7e22ce' : '#d97706', lineHeight: 1 }}>
+                    <div style={{ background: (phce.ce == null || phce.ce <= CE_MAX) ? 'linear-gradient(135deg, #f1f5f9, #e2e8f0)' : 'linear-gradient(135deg, #fef3c7, #fde68a)', padding: M('24px', '14px 10px'), borderRadius: '20px', border: (phce.ce == null || phce.ce <= CE_MAX) ? '3px solid #64748b' : '3px solid #fbbf24', textAlign: 'center' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '800', color: '#374151', marginBottom: '10px' }}>SALINIDAD (CE)</div>
+                      <div style={{ fontSize: M('46px', '32px'), fontWeight: '900', color: (phce.ce == null || phce.ce <= CE_MAX) ? '#334155' : '#d97706', lineHeight: 1 }}>
                         {phce.ce != null ? phce.ce : 's/d'}
                       </div>
-                      <div style={{ fontSize: '16px', fontWeight: '800', color: (phce.ce == null || phce.ce <= CE_MAX) ? '#7e22ce' : '#d97706', marginTop: '12px' }}>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: (phce.ce == null || phce.ce <= CE_MAX) ? '#334155' : '#d97706', marginTop: '10px' }}>
                         {(phce.ce == null || phce.ce <= CE_MAX) ? "✓ ORIENTATIVO" : "⚠ REVISAR"}
                       </div>
-                      <div style={{ fontSize: '13px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
+                      <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
                         dS/m · Máximo: {CE_MAX}
+                      </div>
+                    </div>
+
+                    <div style={{ background: 'linear-gradient(135deg, #f5e6d8, #e8d2bd)', padding: M('24px', '14px 10px'), gridColumn: mob ? '1 / -1' : 'auto', borderRadius: '20px', border: '3px solid #a9794f', textAlign: 'center' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '800', color: '#374151', marginBottom: '10px' }}>DENSIDAD APARENTE</div>
+                      <div style={{ fontSize: M('46px', '32px'), fontWeight: '900', color: '#7c4a24', lineHeight: 1 }}>
+                        {densMix.dens != null ? densMix.dens : 's/d'}
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: '800', color: '#7c4a24', marginTop: '10px' }}>
+                        {densMix.dens != null ? "ℹ INFORMATIVO" : "ℹ DATOS INSUFICIENTES"}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginTop: '6px' }}>
+                        kg/m³ · Con dato: {densMix.coverPct}% de la mezcla
                       </div>
                     </div>
                   </div>
 
+                  {selected.length > 0 && (
+                    <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: '600', marginTop: '-12px', marginBottom: '28px' }}>
+                      Densidad aparente: dato informativo (kg/m³, material con su humedad). Se calcula sumando volúmenes solo de los materiales con dato (≈ indica estimación por analogía; «s/d», sin dato) y se muestra si cubren al menos el {DENS_MIN_COVER}% de la mezcla. La densidad aparente real depende de la compactación y de la humedad.
+                    </div>
+                  )}
+
                   {/* pH Y SALINIDAD */}
                   {selected.length > 0 && (
-                    <div style={{ background: phWarnings.length ? 'linear-gradient(135deg, #fef3c7, #fde68a)' : '#f9fafb', padding: '24px', borderRadius: '16px', border: phWarnings.length ? '3px solid #fbbf24' : '3px solid #e5e7eb', marginBottom: '28px' }}>
+                    <div style={{ background: phWarnings.length ? 'linear-gradient(135deg, #fef3c7, #fde68a)' : '#f9fafb', padding: M('24px', '14px'), borderRadius: '16px', border: phWarnings.length ? '3px solid #fbbf24' : '3px solid #e5e7eb', marginBottom: '28px' }}>
                       <div style={{ fontWeight: '900', fontSize: '18px', color: '#111827', marginBottom: '10px' }}>pH y salinidad (orientativo)</div>
                       <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '15px', fontWeight: '700', color: '#374151', marginBottom: '10px' }}>
                         <span>Mezcla sin datos: {phce.noDataPct}%</span>
@@ -731,14 +869,14 @@ PARÁMETROS DE REFERENCIA:
                   {/* RECOMENDACIÓN */}
                   <div style={{ 
                     background: cnOk && humOk ? 'linear-gradient(135deg, #d1fae5, #a7f3d0)' : 'linear-gradient(135deg, #fef3c7, #fde68a)',
-                    padding: '24px',
+                    padding: M('24px', '14px'),
                     borderRadius: '16px',
                     border: cnOk && humOk ? '3px solid #10b981' : '3px solid #fbbf24',
                     display: 'flex',
                     alignItems: 'start',
                     gap: '16px'
                   }}>
-                    <span style={{ fontSize: '42px' }}>{cnOk && humOk ? "🎉" : "💡"}</span>
+                    <span style={{ fontSize: M('42px', '30px') }}>{cnOk && humOk ? "🎉" : "💡"}</span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: '900', fontSize: '20px', marginBottom: '8px', color: cnOk && humOk ? '#065f46' : '#92400e' }}>
                         {cnOk && humOk ? "¡Mezcla Perfecta!" : "Recomendación"}
@@ -751,11 +889,11 @@ PARÁMETROS DE REFERENCIA:
                 </div>
               </>
             ) : (
-              <div style={{ background: 'white', borderRadius: '20px', padding: '60px 28px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', textAlign: 'center' }}>
-                <div style={{ width: '96px', height: '96px', background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '50%', margin: '0 auto 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 2s infinite' }}>
+              <div style={{ background: 'white', borderRadius: '20px', padding: M('60px 28px', '32px 18px'), boxShadow: '0 4px 12px rgba(0,0,0,0.08)', textAlign: 'center' }}>
+                <div style={{ width: M('96px', '64px'), height: M('96px', '64px'), background: 'linear-gradient(135deg, #10b981, #059669)', borderRadius: '50%', margin: '0 auto 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 2s infinite' }}>
                   <Leaf size={52} color="white" strokeWidth={3} />
                 </div>
-                <h3 style={{ fontSize: '30px', fontWeight: '900', color: '#111827', marginBottom: '12px' }}>¡Comienza tu Mezcla!</h3>
+                <h3 style={{ fontSize: M('30px', '22px'), fontWeight: '900', color: '#111827', marginBottom: '12px' }}>¡Comienza tu Mezcla!</h3>
                 <p style={{ fontSize: '16px', color: '#6b7280', fontWeight: '600', maxWidth: '400px', margin: '0 auto' }}>
                   Selecciona materiales de la izquierda para calcular la relación C/N y humedad óptimas
                 </p>
@@ -765,7 +903,18 @@ PARÁMETROS DE REFERENCIA:
         </div>
 
         {/* PIE: TITULARIDAD Y DERECHOS */}
-        <footer style={{ marginTop: '32px', background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', textAlign: 'center', color: '#4b5563', fontSize: '14px', lineHeight: 1.6 }}>
+        <details style={{ marginTop: '32px', background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', color: '#4b5563', fontSize: '13px', lineHeight: 1.6 }}>
+          <summary style={{ fontWeight: '800', fontSize: '15px', color: '#111827', cursor: 'pointer' }}>Fuentes de los datos</summary>
+          <ul style={{ margin: '12px 0 0 0', paddingLeft: '20px' }}>
+            <li>Rangos de C/N, humedad y pH, y parte de los materiales: Rynk, R. (ed.) et al. (1992). <i>On-Farm Composting Handbook</i> (NRAES-54). NRAES, Ithaca (NY).</li>
+            <li>Densidad aparente y otros materiales: Compost Research &amp; Education Foundation (2021). <i>The Composting Handbook</i>, Apéndice B; WSU-Puyallup, Compost Mix Calculator (2012).</li>
+            <li>Materiales mediterráneos (alperujo, orujo de uva, poda de olivo): Álvarez de la Puente, J. M. (2006). Estudio sobre mezclas óptimas de material vegetal para compostaje de alperujos. Junta de Andalucía.</li>
+            <li>pH y salinidad: publicaciones científicas citadas por material (Ion et al. 2021, García-Randez et al. 2023, Tortosa et al. 2012, Khater 2015, entre otras).</li>
+            <li>Residuos de cocina: MITECO, Biorresiduos: características.</li>
+          </ul>
+        </details>
+
+        <footer style={{ marginTop: '16px', background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', textAlign: 'center', color: '#4b5563', fontSize: '14px', lineHeight: 1.6 }}>
           <p style={{ margin: 0, fontWeight: '600' }}>
             CompostMaster es una aplicación de la{' '}
             <a href="https://www.agroecologia.net/" target="_blank" rel="noopener noreferrer" style={{ color: '#059669', fontWeight: '700' }}>
@@ -786,10 +935,10 @@ PARÁMETROS DE REFERENCIA:
         {/* MODALES - (igual que antes, sin cambios)  */}
 
         {showHistory && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', zIndex: 50 }}>
-            <div style={{ background: 'white', borderRadius: '24px', maxWidth: '800px', width: '100%', padding: '32px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: M('20px', '8px'), zIndex: 50 }}>
+            <div style={{ background: 'white', borderRadius: '24px', maxWidth: '800px', width: '100%', padding: M('32px', '16px'), maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h3 style={{ fontSize: '28px', fontWeight: '900', color: '#111827', margin: 0 }}>Mezclas Guardadas</h3>
+                <h3 style={{ fontSize: M('28px', '20px'), fontWeight: '900', color: '#111827', margin: 0 }}>Mezclas Guardadas</h3>
                 <button onClick={() => setShowHistory(false)} style={{ background: '#f3f4f6', border: 'none', borderRadius: '8px', padding: '8px', cursor: 'pointer' }}>
                   <X size={24} />
                 </button>
@@ -803,7 +952,7 @@ PARÁMETROS DE REFERENCIA:
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {savedMixes.map(mix => (
                     <div key={mix.id} style={{ border: '3px solid #e5e7eb', borderRadius: '16px', padding: '20px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
                         <div>
                           <h4 style={{ fontSize: '20px', fontWeight: '900', color: '#111827', margin: '0 0 4px 0' }}>{mix.name}</h4>
                           <p style={{ fontSize: '14px', color: '#6b7280', fontWeight: '600', margin: 0 }}>
@@ -819,7 +968,7 @@ PARÁMETROS DE REFERENCIA:
                           </button>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', gap: '12px' }}>
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                         <div style={{ background: '#d1fae5', padding: '8px 16px', borderRadius: '8px' }}>
                           <span style={{ fontSize: '13px', color: '#065f46', fontWeight: '600' }}>C/N: </span>
                           <span style={{ fontSize: '18px', color: '#059669', fontWeight: '900' }}>{mix.stats.cn}</span>
@@ -843,16 +992,19 @@ PARÁMETROS DE REFERENCIA:
           0%, 100% { opacity: 1; }
           50% { opacity: 0.7; }
         }
-        button:hover {
-          transform: translateY(-2px);
-          transition: all 0.2s;
+        @media (hover: hover) {
+          button:hover {
+            transform: translateY(-2px);
+            transition: all 0.2s;
+          }
+          button:active {
+            transform: translateY(0);
+          }
         }
-        button:active {
-          transform: translateY(0);
-        }
-        details[open] > summary span:last-child {
-          transform: rotate(90deg);
-        }
+        .chev, .chev-down { display: inline-block; transition: transform 0.2s; }
+        details[open] > summary .chev { transform: rotate(90deg); }
+        details[open] > summary .chev-down { transform: rotate(180deg); }
+        summary::-webkit-details-marker { display: none; }
       `}</style>
     </div>
   );

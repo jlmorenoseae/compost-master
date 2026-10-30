@@ -2,6 +2,8 @@
 
 Calculadora de compostaje (relación C/N y humedad de mezclas) desarrollada por la **Sociedad Española de Agricultura Ecológica y Agroecología (SEAE)** — https://www.agroecologia.net/
 
+Dirección oficial de la aplicación: https://compostaje.agroecologia.net/
+
 ## Derechos
 
 © 2026 Sociedad Española de Agricultura Ecológica y Agroecología (SEAE). Todos los derechos reservados.

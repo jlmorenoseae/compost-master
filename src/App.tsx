@@ -955,6 +955,16 @@ PARÁMETROS DE REFERENCIA:
           </ul>
         </details>
 
+        <section style={{ marginTop: '16px', background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', color: '#4b5563', fontSize: '14px', lineHeight: 1.6 }}>
+          <h2 style={{ margin: 0, fontWeight: '800', fontSize: '15px', color: '#111827' }}>Más información</h2>
+          <p style={{ margin: '6px 0 0 0' }}>
+            Formación en línea sobre las materias primas, el proceso y el uso del compost:{' '}
+            <a href="https://agrocompostaje.umh.es/formacion/formacion-on-line/" target="_blank" rel="noopener noreferrer" style={{ color: '#059669', fontWeight: '700' }}>
+              AgroCompostaje, Universidad Miguel Hernández de Elche (UMH)
+            </a>.
+          </p>
+        </section>
+
         <footer style={{ marginTop: '16px', background: 'white', borderRadius: '16px', padding: '20px 24px', boxShadow: '0 4px 12px rgba(0,0,0,0.06)', textAlign: 'center', color: '#4b5563', fontSize: '14px', lineHeight: 1.6 }}>
           <p style={{ margin: 0, fontWeight: '600' }}>
             CompostMaster es una aplicación de la{' '}

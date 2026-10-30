@@ -977,7 +977,7 @@ PARÁMETROS DE REFERENCIA:
           </p>
           <p style={{ margin: '4px 0 0 0' }}>
             Contacto:{' '}
-            <a href="mailto:comunicacion@agroecologia.net" style={{ color: '#059669', fontWeight: '700' }}>comunicacion@agroecologia.net</a>
+            <a href="mailto:compostaje@agroecologia.net" style={{ color: '#059669', fontWeight: '700' }}>compostaje@agroecologia.net</a>
             {' · '}Tlf:{' '}
             <a href="tel:+34961267122" style={{ color: '#059669', fontWeight: '700' }}>961 267 122</a>
           </p>

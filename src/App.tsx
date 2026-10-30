@@ -773,18 +773,23 @@ PARÁMETROS DE REFERENCIA:
                               padding: '0 12px',
                               transition: 'width 0.5s ease-out'
                             }}>
-                              {percentage >= (mob ? 30 : 0) && (
+                              {!mob && (
                               <span style={{ color: 'white', fontWeight: '800', fontSize: '13px', whiteSpace: 'nowrap' }}>
                                 {(m.proportion / 10).toFixed(1)} partes
                               </span>
                               )}
-                              {percentage > (mob ? 60 : 30) && (
+                              {!mob && percentage > 30 && (
                                 <span style={{ color: 'white', fontWeight: '700', fontSize: '12px', opacity: 0.9 }}>
                                   C/N: {cn}
                                 </span>
                               )}
                             </div>
                           </div>
+                          {mob && (
+                            <div style={{ marginTop: '4px', fontSize: '13px', fontWeight: '700', color: '#4b5563' }}>
+                              {(m.proportion / 10).toFixed(1)} partes · C/N: {cn}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
